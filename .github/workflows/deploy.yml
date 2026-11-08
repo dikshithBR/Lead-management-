@@ -16,6 +16,9 @@ jobs:
           node-version: 22
       - run: npm install --legacy-peer-deps
       - run: npm run build
+      - run: node -e 'try { const sa = JSON.parse(process.env.SA); console.log("::notice::Using Service Account Email -> " + sa.client_email + " for project -> " + sa.project_id); } catch(e) { console.log("::error::Invalid JSON in FIREBASE_SERVICE_ACCOUNT"); }'
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
