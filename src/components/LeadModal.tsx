@@ -213,8 +213,18 @@ export const LeadModal: React.FC<LeadModalProps> = ({
             </label>
             <select
               value={stage}
-              onChange={(e) => setStage(e.target.value as PipelineStage)}
-              className="w-full px-3 py-2 bg-[#090f1d] border border-white/[0.08] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl text-sm text-white transition-colors cursor-pointer"
+              onChange={(e) => {
+                const newS = e.target.value as PipelineStage;
+                setStage(newS);
+                if (newS === 'Call on Custom Date' && (!nextActionNote || nextActionNote.includes('Initial discovery'))) {
+                  setNextActionNote('Client requested call-back on this date.');
+                }
+              }}
+              className={`w-full px-3 py-2 bg-[#090f1d] border focus:ring-1 rounded-xl text-sm text-white transition-colors cursor-pointer ${
+                stage === 'Call on Custom Date'
+                  ? 'border-violet-500/50 focus:border-violet-500 focus:ring-violet-500'
+                  : 'border-white/[0.08] focus:border-blue-500 focus:ring-blue-500'
+              }`}
             >
               {ALL_STAGES.map((s) => (
                 <option key={s} value={s} className="bg-[#0f1b35] text-white">
@@ -223,6 +233,18 @@ export const LeadModal: React.FC<LeadModalProps> = ({
               ))}
             </select>
           </div>
+
+          {stage === 'Call on Custom Date' && (
+            <div className="p-3 bg-violet-950/30 border border-violet-500/30 rounded-xl space-y-1">
+              <div className="flex items-center gap-2 text-violet-300 text-xs font-semibold">
+                <Calendar className="w-3.5 h-3.5 text-violet-400" />
+                <span>Client Requested Custom Call Date</span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Please pick the exact date below the client requested for the follow-up call.
+              </p>
+            </div>
+          )}
 
           {/* Row 3: Next Action Deadline & Quick Preset Buttons */}
           <div>

@@ -19,6 +19,7 @@ import {
 import { Lead, PipelineStage, ALL_STAGES } from '../types/lead';
 import { useLeadContext } from '../context/LeadContext';
 import { formatDueDateLabel, formatWhatsAppUrl } from '../utils/dateUtils';
+import { ScheduleCallModal } from './ScheduleCallModal';
 
 type ActionSubFilter = 'due_or_overdue' | 'upcoming' | 'completed_today';
 
@@ -40,6 +41,7 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
   } = useLeadContext();
 
   const [subFilter, setSubFilter] = useState<ActionSubFilter>('due_or_overdue');
+  const [schedulingLead, setSchedulingLead] = useState<Lead | null>(null);
 
   const filteredActionLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -77,6 +79,8 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
         return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
       case 'Second Trial':
         return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      case 'Call on Custom Date':
+        return 'bg-violet-500/15 text-violet-300 border-violet-500/30';
       case 'Converted':
         return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
       case 'Redundant':
@@ -350,13 +354,28 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
                       >
                         +3 Days
                       </button>
+                      <button
+                        onClick={() => setSchedulingLead(lead)}
+                        className="px-2.5 py-1.5 rounded-xl text-xs font-medium bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 transition-colors flex items-center gap-1"
+                        title="Set exact custom date client requested to be called"
+                      >
+                        <Calendar className="w-3 h-3 text-violet-400" />
+                        <span>Custom Call Date</span>
+                      </button>
                     </div>
 
                     {/* Direct Stage Advance Dropdown */}
                     <div className="flex items-center gap-1.5">
                       <select
                         value={lead.stage}
-                        onChange={(e) => changeStage(lead.id, e.target.value as PipelineStage)}
+                        onChange={(e) => {
+                          const newStage = e.target.value as PipelineStage;
+                          if (newStage === 'Call on Custom Date') {
+                            setSchedulingLead(lead);
+                          } else {
+                            changeStage(lead.id, newStage);
+                          }
+                        }}
                         className="text-xs py-1.5 px-2 bg-[#18274b] border border-white/[0.08] text-slate-200 rounded-xl focus:border-blue-500 cursor-pointer"
                       >
                         {ALL_STAGES.map((s) => (
@@ -384,6 +403,20 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
         )}
       </div>
 
+      {/* Schedule Custom Call Modal */}
+      <ScheduleCallModal
+        isOpen={!!schedulingLead}
+        onClose={() => setSchedulingLead(null)}
+        lead={schedulingLead}
+        onConfirm={async (customDate, customNote) => {
+          if (schedulingLead) {
+            await changeStage(schedulingLead.id, 'Call on Custom Date', {
+              actionDueDate: customDate,
+              nextActionNote: customNote,
+            });
+          }
+        }}
+      />
     </div>
   );
 };

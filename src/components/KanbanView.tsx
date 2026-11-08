@@ -16,6 +16,7 @@ import {
 import { Lead, PipelineStage, ALL_STAGES } from '../types/lead';
 import { useLeadContext } from '../context/LeadContext';
 import { formatDueDateLabel, formatWhatsAppUrl } from '../utils/dateUtils';
+import { ScheduleCallModal } from './ScheduleCallModal';
 
 interface KanbanViewProps {
   onEditLead: (lead: Lead) => void;
@@ -31,6 +32,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   const { leads, changeStage } = useLeadContext();
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<PipelineStage | null>(null);
+  const [schedulingLead, setSchedulingLead] = useState<Lead | null>(null);
 
   // Drag handlers
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
@@ -62,7 +64,16 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
     e.preventDefault();
     const leadId = e.dataTransfer.getData('text/plain') || draggedLeadId;
     if (leadId) {
-      await changeStage(leadId, targetStage);
+      if (targetStage === 'Call on Custom Date') {
+        const found = leads.find((l) => l.id === leadId);
+        if (found) {
+          setSchedulingLead(found);
+        } else {
+          await changeStage(leadId, targetStage);
+        }
+      } else {
+        await changeStage(leadId, targetStage);
+      }
     }
     setDraggedLeadId(null);
     setDragOverStage(null);
@@ -95,6 +106,11 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
           accent: 'border-amber-500/30 text-amber-400 bg-amber-500/10',
           dot: 'bg-amber-400',
         };
+      case 'Call on Custom Date':
+        return {
+          accent: 'border-violet-500/40 text-violet-300 bg-violet-500/15 shadow-[0_0_15px_rgba(139,92,246,0.25)]',
+          dot: 'bg-violet-400',
+        };
       case 'Converted':
         return {
           accent: 'border-emerald-500/40 text-emerald-400 bg-emerald-500/15 shadow-[0_0_15px_rgba(16,185,129,0.25)]',
@@ -112,7 +128,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
     <div className="space-y-3">
       {/* Kanban Board Horizontal Scrolling Canvas */}
       <div className="overflow-x-auto pb-4 scrollbar-thin">
-        <div className="flex gap-4 min-w-[1750px] items-start">
+        <div className="flex gap-4 min-w-[2000px] items-start">
           {ALL_STAGES.map((stage) => {
             const stageLeads = leads.filter((l) => l.stage === stage);
             const isTargetColumn = dragOverStage === stage;
@@ -249,7 +265,14 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                             <div className="flex items-center gap-1">
                               <select
                                 value={lead.stage}
-                                onChange={(e) => changeStage(lead.id, e.target.value as PipelineStage)}
+                                onChange={(e) => {
+                                  const newStage = e.target.value as PipelineStage;
+                                  if (newStage === 'Call on Custom Date') {
+                                    setSchedulingLead(lead);
+                                  } else {
+                                    changeStage(lead.id, newStage);
+                                  }
+                                }}
                                 className="text-[10px] py-0.5 px-1 bg-[#18274b] border border-white/[0.08] text-slate-300 rounded focus:border-blue-500 cursor-pointer"
                                 title="Change Stage"
                               >
@@ -259,6 +282,17 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                                   </option>
                                 ))}
                               </select>
+
+                              {lead.stage === 'Call on Custom Date' && (
+                                <button
+                                  onClick={() => setSchedulingLead(lead)}
+                                  className="p-1 text-violet-400 hover:text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 rounded border border-violet-500/20 transition-colors"
+                                  title="Reschedule Custom Call Date"
+                                >
+                                  <Calendar className="w-3 h-3" />
+                                </button>
+                              )}
+
                               <button
                                 onClick={() => onEditLead(lead)}
                                 className="p-1 text-slate-400 hover:text-blue-400 rounded transition-colors"
@@ -287,6 +321,21 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
           })}
         </div>
       </div>
+
+      {/* Schedule Custom Call Modal */}
+      <ScheduleCallModal
+        isOpen={!!schedulingLead}
+        onClose={() => setSchedulingLead(null)}
+        lead={schedulingLead}
+        onConfirm={async (customDate, customNote) => {
+          if (schedulingLead) {
+            await changeStage(schedulingLead.id, 'Call on Custom Date', {
+              actionDueDate: customDate,
+              nextActionNote: customNote,
+            });
+          }
+        }}
+      />
     </div>
   );
 };

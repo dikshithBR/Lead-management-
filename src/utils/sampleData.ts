@@ -197,7 +197,27 @@ export function generate25SampleLeads(ownerId: string, referenceDate: Date = new
       venue: DEFAULT_VENUES[0],
     },
 
-    // 6. Converted (3 leads - Celebrated Wins)
+    // 6. Call on Custom Date (2 leads)
+    {
+      name: 'Julian Vance',
+      phone: '+1 (512) 555-8910',
+      stage: 'Call on Custom Date',
+      nextActionNote: 'Client requested call back on this date after quarterly board review.',
+      daysOffset: 1,
+      leadSource: DEFAULT_SOURCES[0],
+      venue: DEFAULT_VENUES[1],
+    },
+    {
+      name: 'Seraphina Dubois',
+      phone: '+1 (305) 555-7744',
+      stage: 'Call on Custom Date',
+      nextActionNote: 'Client asked to call on this date after returning from regional conference.',
+      daysOffset: 3,
+      leadSource: DEFAULT_SOURCES[2],
+      venue: DEFAULT_VENUES[3],
+    },
+
+    // 7. Converted (3 leads - Celebrated Wins)
     {
       name: 'Isabella Rivera',
       phone: '+1 (818) 555-3321',

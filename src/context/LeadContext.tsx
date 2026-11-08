@@ -43,7 +43,7 @@ interface LeadContextType {
   // Fast Actions
   markActionDone: (id: string) => Promise<void>;
   rescheduleLead: (id: string, daysOffset: number) => Promise<void>;
-  changeStage: (id: string, newStage: PipelineStage) => Promise<void>;
+  changeStage: (id: string, newStage: PipelineStage, extraUpdates?: Partial<Lead>) => Promise<void>;
 
   // Custom metadata
   addCustomSource: (source: string) => Promise<void>;
@@ -254,8 +254,8 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Change Stage
-  const changeStage = async (id: string, newStage: PipelineStage) => {
-    await updateLead(id, { stage: newStage });
+  const changeStage = async (id: string, newStage: PipelineStage, extraUpdates?: Partial<Lead>) => {
+    await updateLead(id, { stage: newStage, ...extraUpdates });
   };
 
   // Delete Lead

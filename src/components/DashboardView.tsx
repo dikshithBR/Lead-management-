@@ -21,6 +21,7 @@ import { Lead, PipelineStage, ALL_STAGES, UrgencyStatus } from '../types/lead';
 import { useLeadContext } from '../context/LeadContext';
 import { formatDueDateLabel, formatWhatsAppUrl } from '../utils/dateUtils';
 import { exportLeadsToCSV } from '../utils/csvExport';
+import { ScheduleCallModal } from './ScheduleCallModal';
 
 interface DashboardViewProps {
   onEditLead: (lead: Lead) => void;
@@ -40,6 +41,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [venueFilter, setVenueFilter] = useState<string>('all');
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyStatus | 'all'>('all');
+  const [schedulingLead, setSchedulingLead] = useState<Lead | null>(null);
 
   const hasActiveFilters =
     searchQuery.trim() !== '' ||
@@ -105,6 +107,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
       case 'Second Trial':
         return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      case 'Call on Custom Date':
+        return 'bg-violet-500/15 text-violet-300 border-violet-500/30 shadow-[0_0_10px_rgba(139,92,246,0.15)]';
       case 'Converted':
         return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.25)]';
       case 'Redundant':
@@ -343,19 +347,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                       {/* Stage (with inline stage switcher) */}
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <select
-                          value={lead.stage}
-                          onChange={(e) => changeStage(lead.id, e.target.value as PipelineStage)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer bg-[#090f1d] ${getStageColorBadge(
-                            lead.stage
-                          )}`}
-                        >
-                          {ALL_STAGES.map((s) => (
-                            <option key={s} value={s} className="bg-[#0f1b35] text-white">
-                              {s}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={lead.stage}
+                            onChange={(e) => {
+                              const newStage = e.target.value as PipelineStage;
+                              if (newStage === 'Call on Custom Date') {
+                                setSchedulingLead(lead);
+                              } else {
+                                changeStage(lead.id, newStage);
+                              }
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer bg-[#090f1d] ${getStageColorBadge(
+                              lead.stage
+                            )}`}
+                          >
+                            {ALL_STAGES.map((s) => (
+                              <option key={s} value={s} className="bg-[#0f1b35] text-white">
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+
+                          {lead.stage === 'Call on Custom Date' && (
+                            <button
+                              onClick={() => setSchedulingLead(lead)}
+                              className="p-1 rounded-md bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 border border-violet-500/30 transition-colors"
+                              title="Reschedule Custom Call Date"
+                            >
+                              <Calendar className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
 
                       {/* Next Action & Urgency Badge */}
@@ -409,6 +432,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      {/* Schedule Custom Call Modal */}
+      <ScheduleCallModal
+        isOpen={!!schedulingLead}
+        onClose={() => setSchedulingLead(null)}
+        lead={schedulingLead}
+        onConfirm={async (customDate, customNote) => {
+          if (schedulingLead) {
+            await changeStage(schedulingLead.id, 'Call on Custom Date', {
+              actionDueDate: customDate,
+              nextActionNote: customNote,
+            });
+          }
+        }}
+      />
     </div>
   );
 };
