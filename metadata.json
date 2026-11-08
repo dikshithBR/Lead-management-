@@ -1,0 +1,6 @@
+{
+  "name": "LeadFlow - Lead Management & Pipeline CRM",
+  "description": "Production-grade lead management CRM with Kanban pipeline, daily action tracker, offline-first local persistence, and WhatsApp direct client engagement.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

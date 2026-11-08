@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "Sales pipeline lead with contact details, venue, stage, and follow-up deadline",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the lead",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the lead",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number for calling and WhatsApp",
+          "minLength": 5,
+          "maxLength": 30
+        },
+        "stage": {
+          "type": "string",
+          "description": "Current pipeline stage of the lead",
+          "enum": [
+            "Inquired",
+            "Trial",
+            "First Follow-up",
+            "Second Follow-up",
+            "Second Trial",
+            "Converted",
+            "Redundant"
+          ]
+        },
+        "nextActionNote": {
+          "type": "string",
+          "description": "Description of next action or follow-up note",
+          "maxLength": 500
+        },
+        "actionDueDate": {
+          "type": "string",
+          "description": "Due date for next action (YYYY-MM-DD format)",
+          "maxLength": 30
+        },
+        "leadSource": {
+          "type": "string",
+          "description": "Source where the lead originated from",
+          "maxLength": 60
+        },
+        "venue": {
+          "type": "string",
+          "description": "Assigned venue or location for the lead",
+          "maxLength": 60
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Owner identifier",
+          "maxLength": 128
+        },
+        "isCompletedToday": {
+          "type": "boolean",
+          "description": "Flag indicating if today's action for this lead was marked completed"
+        },
+        "completedAt": {
+          "type": "string",
+          "description": "ISO timestamp of completion",
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp when lead was created",
+          "maxLength": 40
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp when lead was last updated",
+          "maxLength": 40
+        }
+      },
+      "required": ["id", "name", "phone", "stage", "nextActionNote", "actionDueDate", "leadSource", "venue"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User custom configurations such as custom lead sources and venues",
+      "type": "object",
+      "properties": {
+        "customSources": {
+          "type": "array",
+          "description": "List of custom lead sources"
+        },
+        "customVenues": {
+          "type": "array",
+          "description": "List of custom venues"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of update",
+          "maxLength": 40
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Collection of all sales and client leads"
+    },
+    "/userSettings/{settingId}": {
+      "schema": "UserSettings",
+      "description": "Shared configurations including custom sources and venues"
+    }
+  }
+}
