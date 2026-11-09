@@ -4,6 +4,7 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  getDocs,
   onSnapshot,
   writeBatch,
 } from 'firebase/firestore';
@@ -15,8 +16,13 @@ import {
   DEFAULT_VENUES,
 } from '../types/lead';
 import { db } from '../firebase';
-import { generate25SampleLeads } from '../utils/sampleData';
-import { getTodayDateString, offsetDateString, getUrgencyStatus } from '../utils/dateUtils';
+import {
+  getTodayDateString,
+  offsetDateString,
+  getUrgencyStatus,
+  STAGE_PROGRESSION,
+  calculateTargetStageDeadline,
+} from '../utils/dateUtils';
 
 interface ToastMessage {
   id: string;
@@ -27,6 +33,7 @@ interface ToastMessage {
 
 interface LeadContextType {
   leads: Lead[];
+  isCloudConnected: boolean;
   customSources: string[];
   customVenues: string[];
   allSources: string[];
@@ -39,11 +46,13 @@ interface LeadContextType {
   addLead: (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'ownerId'>) => Promise<string>;
   updateLead: (id: string, updates: Partial<Lead>) => Promise<void>;
   deleteLead: (id: string) => Promise<void>;
+  clearAllLeads: () => Promise<void>;
 
   // Fast Actions
   markActionDone: (id: string) => Promise<void>;
   rescheduleLead: (id: string, daysOffset: number) => Promise<void>;
   changeStage: (id: string, newStage: PipelineStage, extraUpdates?: Partial<Lead>) => Promise<void>;
+  advanceToNextStage: (id: string) => Promise<void>;
 
   // Custom metadata
   addCustomSource: (source: string) => Promise<void>;
@@ -75,12 +84,17 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const stored = localStorage.getItem(LOCAL_STORAGE_LEADS_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          // Filter out any sample data
+          return parsed.filter(
+            (l: Lead) => !l.id?.startsWith('sample-lead-') && !l.name?.includes('Sophia Martinez')
+          );
+        }
       }
     } catch {
       // fallback
     }
-    return generate25SampleLeads('shared-user');
+    return [];
   });
 
   const [customSources, setCustomSources] = useState<string[]>(() => {
@@ -103,6 +117,7 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return [];
   });
 
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const removeToast = useCallback((id: string) => {
@@ -124,25 +139,65 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribeLeads = onSnapshot(
       leadsCol,
       async (snapshot) => {
+        setIsCloudConnected(true);
+
         if (snapshot.empty && !snapshot.metadata.hasPendingWrites) {
-          // Cloud is empty on first run: seed 25 realistic sample leads to Firestore
-          const initialSamples = generate25SampleLeads('shared-user');
-          try {
-            const batch = writeBatch(db);
-            initialSamples.forEach((lead) => {
-              batch.set(doc(db, 'leads', lead.id), lead);
-            });
-            await batch.commit();
-          } catch (seedErr) {
-            console.warn('Initial cloud seed notice:', seedErr);
+          // Check if this device has local leads created offline or prior to sync
+          const localStr = localStorage.getItem(LOCAL_STORAGE_LEADS_KEY);
+          if (localStr) {
+            try {
+              const localParsed: Lead[] = JSON.parse(localStr);
+              const validLocal = localParsed.filter(
+                (l) => !l.id?.startsWith('sample-lead-') && l.name && l.stage
+              );
+              if (validLocal.length > 0) {
+                // Upload local leads to Cloud Firestore so phone and all devices receive them!
+                const batch = writeBatch(db);
+                validLocal.forEach((l) => {
+                  batch.set(doc(db, 'leads', l.id), l);
+                });
+                await batch.commit();
+                return;
+              }
+            } catch (migrationErr) {
+              console.warn('Local leads sync check:', migrationErr);
+            }
           }
+          setLeads([]);
+          localStorage.setItem(LOCAL_STORAGE_LEADS_KEY, JSON.stringify([]));
           return;
         }
 
         const remoteLeads: Lead[] = [];
+        const sampleIdsToDelete: string[] = [];
+
         snapshot.forEach((docSnap) => {
-          remoteLeads.push(docSnap.data() as Lead);
+          const lead = docSnap.data() as Lead;
+          const isSample =
+            docSnap.id.startsWith('sample-lead-') ||
+            lead.id?.startsWith('sample-lead-') ||
+            lead.name === 'Sophia Martinez' ||
+            lead.name === 'Alexander Wright';
+
+          if (isSample) {
+            sampleIdsToDelete.push(docSnap.id);
+          } else {
+            remoteLeads.push(lead);
+          }
         });
+
+        // Automatically delete any discovered sample leads from Firestore
+        if (sampleIdsToDelete.length > 0) {
+          try {
+            const batch = writeBatch(db);
+            sampleIdsToDelete.forEach((sId) => {
+              batch.delete(doc(db, 'leads', sId));
+            });
+            await batch.commit();
+          } catch (cleanErr) {
+            console.warn('Sample leads deletion notice:', cleanErr);
+          }
+        }
 
         // Sort by actionDueDate ascending
         remoteLeads.sort((a, b) => a.actionDueDate.localeCompare(b.actionDueDate));
@@ -150,6 +205,7 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(LOCAL_STORAGE_LEADS_KEY, JSON.stringify(remoteLeads));
       },
       (error) => {
+        setIsCloudConnected(false);
         console.warn('Firestore real-time sync notice (using local offline storage):', error);
       }
     );
@@ -253,9 +309,51 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Change Stage
+  // Change Stage with automated workflow rule calculation
   const changeStage = async (id: string, newStage: PipelineStage, extraUpdates?: Partial<Lead>) => {
-    await updateLead(id, { stage: newStage, ...extraUpdates });
+    const current = leads.find((l) => l.id === id);
+    if (!current) return;
+
+    let autoUpdates: Partial<Lead> = {};
+    // If actionDueDate not manually overridden and stage is changing
+    if (!extraUpdates?.actionDueDate && newStage !== current.stage && newStage !== 'Call on Custom Date') {
+      const rule = calculateTargetStageDeadline(newStage);
+      autoUpdates = {
+        actionDueDate: rule.dueDateStr,
+        nextActionNote: extraUpdates?.nextActionNote || rule.note,
+        isCompletedToday: false,
+      };
+    }
+
+    await updateLead(id, { stage: newStage, ...autoUpdates, ...extraUpdates });
+    showToast('info', 'Stage Updated', `Moved ${current.name} to "${newStage}".`);
+  };
+
+  // 1-Click Advance to Next Stage according to enforced progression
+  const advanceToNextStage = async (id: string) => {
+    const current = leads.find((l) => l.id === id);
+    if (!current) return;
+
+    const progression = STAGE_PROGRESSION[current.stage];
+    if (!progression?.nextStage) {
+      showToast('warning', 'Pipeline Completed', `"${current.stage}" has no subsequent progression stage.`);
+      return;
+    }
+
+    const nextStage = progression.nextStage;
+    const rule = calculateTargetStageDeadline(nextStage);
+    await updateLead(id, {
+      stage: nextStage,
+      actionDueDate: rule.dueDateStr,
+      nextActionNote: rule.note,
+      isCompletedToday: false,
+    });
+
+    showToast(
+      'success',
+      `Advanced to ${nextStage}`,
+      `Follow-up deadline scheduled: ${rule.label} (${rule.dueDateStr})`
+    );
   };
 
   // Delete Lead
@@ -270,6 +368,25 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await deleteDoc(doc(db, 'leads', id));
     } catch (err) {
       console.warn('Cloud delete error, deleted locally:', err);
+    }
+  };
+
+  // Clear All Leads
+  const clearAllLeads = async () => {
+    setLeads([]);
+    localStorage.setItem(LOCAL_STORAGE_LEADS_KEY, JSON.stringify([]));
+    try {
+      const snapshot = await getDocs(collection(db, 'leads'));
+      if (!snapshot.empty) {
+        const batch = writeBatch(db);
+        snapshot.forEach((docSnap) => {
+          batch.delete(docSnap.ref);
+        });
+        await batch.commit();
+      }
+      showToast('info', 'Leads Cleared', 'All leads have been removed.');
+    } catch (err) {
+      console.warn('Error clearing leads:', err);
     }
   };
 
@@ -383,6 +500,7 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <LeadContext.Provider
       value={{
         leads,
+        isCloudConnected,
         customSources,
         customVenues,
         allSources,
@@ -393,9 +511,11 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addLead,
         updateLead,
         deleteLead,
+        clearAllLeads,
         markActionDone,
         rescheduleLead,
         changeStage,
+        advanceToNextStage,
         addCustomSource,
         addCustomVenue,
         kpiStats,

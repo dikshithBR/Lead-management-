@@ -11,6 +11,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useLeadContext } from '../context/LeadContext';
+import { ALL_STAGES } from '../types/lead';
 
 export type ActiveView = 'dashboard' | 'kanban' | 'actions';
 
@@ -25,7 +26,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveView,
   onOpenAddModal,
 }) => {
-  const { kpiStats } = useLeadContext();
+  const { kpiStats, isCloudConnected } = useLeadContext();
 
   return (
     <header className="sticky top-0 z-40 bg-[#090f1d]/90 backdrop-blur-xl border-b border-white/[0.08] shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
@@ -92,8 +93,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Action Button: + Add Lead */}
-          <div className="flex items-center gap-2.5">
+          {/* Action Button & Live Cloud Sync Status */}
+          <div className="flex items-center gap-3">
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0f1b35] border border-white/[0.08] text-[11px] font-medium"
+              title={isCloudConnected ? "Real-time Cloud Sync active with Firebase Firestore" : "Connecting to Cloud Firestore..."}
+            >
+              <span className={`w-2 h-2 rounded-full ${isCloudConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span className={isCloudConnected ? 'text-emerald-400 text-xs font-mono hidden sm:inline' : 'text-amber-400 text-xs font-mono hidden sm:inline'}>
+                {isCloudConnected ? 'Cloud Synced' : 'Syncing...'}
+              </span>
+            </div>
+
             <button
               onClick={onOpenAddModal}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 border border-blue-400/40 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.35)] hover:shadow-[0_0_25px_rgba(59,130,246,0.5)] transition-all active:scale-95 cursor-pointer"
@@ -130,7 +141,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <KanbanSquare className="w-3.5 h-3.5" />
             <span>Kanban Board</span>
             <span className="ml-1 px-1.5 py-0.2 rounded text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20">
-              7 Stages
+              {ALL_STAGES.length} Stages
             </span>
           </button>
 

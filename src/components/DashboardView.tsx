@@ -16,12 +16,23 @@ import {
   AlertCircle,
   CheckCircle,
   ExternalLink,
+  Plus,
+  ArrowRight,
+  PhoneCall,
 } from 'lucide-react';
 import { Lead, PipelineStage, ALL_STAGES, UrgencyStatus } from '../types/lead';
 import { useLeadContext } from '../context/LeadContext';
-import { formatDueDateLabel, formatWhatsAppUrl } from '../utils/dateUtils';
+import {
+  formatDueDateLabel,
+  formatWhatsAppUrl,
+  openWhatsApp,
+  STAGE_PROGRESSION,
+  getTodayDateString,
+  offsetDateString,
+} from '../utils/dateUtils';
 import { exportLeadsToCSV } from '../utils/csvExport';
 import { ScheduleCallModal } from './ScheduleCallModal';
+import { ReturnToPipelineModal } from './ReturnToPipelineModal';
 
 interface DashboardViewProps {
   onEditLead: (lead: Lead) => void;
@@ -34,7 +45,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onRequestDelete,
   onOpenAddModal,
 }) => {
-  const { leads, allSources, allVenues, changeStage } = useLeadContext();
+  const { leads, allSources, allVenues, changeStage, advanceToNextStage, rescheduleLead } = useLeadContext();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<PipelineStage | 'all'>('all');
@@ -42,6 +53,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [venueFilter, setVenueFilter] = useState<string>('all');
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyStatus | 'all'>('all');
   const [schedulingLead, setSchedulingLead] = useState<Lead | null>(null);
+  const [returnLead, setReturnLead] = useState<Lead | null>(null);
 
   const hasActiveFilters =
     searchQuery.trim() !== '' ||
@@ -107,6 +119,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
       case 'Second Trial':
         return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      case 'Third Follow-up':
+        return 'bg-teal-500/15 text-teal-300 border-teal-500/30';
       case 'Call on Custom Date':
         return 'bg-violet-500/15 text-violet-300 border-violet-500/30 shadow-[0_0_10px_rgba(139,92,246,0.15)]';
       case 'Converted':
@@ -264,7 +278,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             {/* Table Body */}
             <tbody className="divide-y divide-white/[0.04]">
-              {filteredLeads.length === 0 ? (
+              {leads.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-16 text-center text-slate-400">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mx-auto mb-3">
+                      <Plus className="w-6 h-6" />
+                    </div>
+                    <p className="text-base font-bold text-white">Your Pipeline is Clean & Ready</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                      All sample data has been removed. You can now start adding your own client leads.
+                    </p>
+                    <button
+                      onClick={onOpenAddModal}
+                      className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Create First Lead</span>
+                    </button>
+                  </td>
+                </tr>
+              ) : filteredLeads.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
                     <AlertCircle className="w-8 h-8 text-slate-500 mx-auto mb-2 opacity-60" />
@@ -316,15 +349,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             <span>{lead.phone}</span>
                           </a>
                           
-                          {/* WhatsApp Direct */}
+                          {/* WhatsApp Business Direct */}
                           <a
                             href={waUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/20 transition-all ml-1"
-                            title="Open WhatsApp Chat with client"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              openWhatsApp(lead.phone, lead.name, lead.venue, 'business');
+                            }}
+                            className="inline-flex items-center gap-1 px-1.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/20 transition-all ml-1 cursor-pointer"
+                            title="Open in WhatsApp Business"
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
+                            <span className="text-[10px] font-semibold">WA Business</span>
                           </a>
                         </div>
                       </td>
@@ -345,7 +381,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </span>
                       </td>
 
-                      {/* Stage (with inline stage switcher) */}
+                      {/* Stage (with inline stage switcher and workflow advance controls) */}
                       <td className="py-3 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <select
@@ -369,14 +405,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             ))}
                           </select>
 
-                          {lead.stage === 'Call on Custom Date' && (
-                            <button
-                              onClick={() => setSchedulingLead(lead)}
-                              className="p-1 rounded-md bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 border border-violet-500/30 transition-colors"
-                              title="Reschedule Custom Call Date"
-                            >
-                              <Calendar className="w-3.5 h-3.5" />
-                            </button>
+                          {lead.stage === 'Call on Custom Date' ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setReturnLead(lead)}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[11px] font-semibold transition-colors cursor-pointer"
+                                title="Call finished: Return client to pipeline"
+                              >
+                                <ArrowRight className="w-3 h-3 text-blue-400" />
+                                <span>Add to Pipeline</span>
+                              </button>
+                              <button
+                                onClick={() => setSchedulingLead(lead)}
+                                className="p-1 rounded-md bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 border border-violet-500/30 transition-colors cursor-pointer"
+                                title="Reschedule Custom Call Date"
+                              >
+                                <Calendar className="w-3.5 h-3.5" />
+                              </button>
+                              {urgency.status === 'overdue' && (
+                                <button
+                                  onClick={() => rescheduleLead(lead.id, 1)}
+                                  className="px-1.5 py-1 rounded-md bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border border-rose-500/30 text-[10px] font-mono transition-colors cursor-pointer"
+                                  title="Missed call: Push to next day (+1d)"
+                                >
+                                  +1d Missed
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            STAGE_PROGRESSION[lead.stage]?.nextStage && (
+                              <button
+                                onClick={() => advanceToNextStage(lead.id)}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/20 text-[11px] font-medium transition-colors cursor-pointer"
+                                title={`Advance to ${STAGE_PROGRESSION[lead.stage].nextStage} (${STAGE_PROGRESSION[lead.stage].intervalText})`}
+                              >
+                                <span>Advance ➔</span>
+                              </button>
+                            )
                           )}
                         </div>
                       </td>
@@ -442,6 +507,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             await changeStage(schedulingLead.id, 'Call on Custom Date', {
               actionDueDate: customDate,
               nextActionNote: customNote,
+            });
+          }
+        }}
+      />
+
+      {/* Return to Pipeline Modal for Call on Custom Date leads */}
+      <ReturnToPipelineModal
+        isOpen={!!returnLead}
+        onClose={() => setReturnLead(null)}
+        lead={returnLead}
+        onConfirm={async (targetStage, callOutcomeNote) => {
+          if (returnLead) {
+            await changeStage(returnLead.id, targetStage, {
+              nextActionNote: callOutcomeNote,
             });
           }
         }}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Sparkles, Plus, Calendar, Phone, User as UserIcon, MapPin, Tag, Check } from 'lucide-react';
 import { Lead, PipelineStage, ALL_STAGES } from '../types/lead';
 import { useLeadContext } from '../context/LeadContext';
-import { getTodayDateString, offsetDateString } from '../utils/dateUtils';
+import { getTodayDateString, offsetDateString, calculateTargetStageDeadline } from '../utils/dateUtils';
 
 interface LeadModalProps {
   isOpen: boolean;
@@ -216,8 +216,17 @@ export const LeadModal: React.FC<LeadModalProps> = ({
               onChange={(e) => {
                 const newS = e.target.value as PipelineStage;
                 setStage(newS);
-                if (newS === 'Call on Custom Date' && (!nextActionNote || nextActionNote.includes('Initial discovery'))) {
-                  setNextActionNote('Client requested call-back on this date.');
+                if (newS === 'Call on Custom Date') {
+                  if (!nextActionNote || nextActionNote.includes('Initial discovery')) {
+                    setNextActionNote('Client requested call-back on this date.');
+                  }
+                  setActionDueDate(offsetDateString(today, 1));
+                } else {
+                  const rule = calculateTargetStageDeadline(newS);
+                  setActionDueDate(rule.dueDateStr);
+                  if (!nextActionNote || nextActionNote.includes('Initial discovery') || nextActionNote.includes('follow-up') || nextActionNote.includes('trial')) {
+                    setNextActionNote(rule.note);
+                  }
                 }
               }}
               className={`w-full px-3 py-2 bg-[#090f1d] border focus:ring-1 rounded-xl text-sm text-white transition-colors cursor-pointer ${

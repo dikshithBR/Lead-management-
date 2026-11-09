@@ -197,16 +197,18 @@ export function generate25SampleLeads(ownerId: string, referenceDate: Date = new
       venue: DEFAULT_VENUES[0],
     },
 
-    // 6. Call on Custom Date (2 leads)
+    // 6. Third Follow-up
     {
       name: 'Julian Vance',
       phone: '+1 (512) 555-8910',
-      stage: 'Call on Custom Date',
-      nextActionNote: 'Client requested call back on this date after quarterly board review.',
-      daysOffset: 1,
+      stage: 'Third Follow-up',
+      nextActionNote: 'Third follow-up call after second trial to finalize membership package.',
+      daysOffset: 0,
       leadSource: DEFAULT_SOURCES[0],
       venue: DEFAULT_VENUES[1],
     },
+
+    // 7. Call on Custom Date
     {
       name: 'Seraphina Dubois',
       phone: '+1 (305) 555-7744',

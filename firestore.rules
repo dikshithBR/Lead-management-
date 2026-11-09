@@ -14,12 +14,12 @@ service cloud.firestore {
       return data.keys().hasAll(['id', 'name', 'phone', 'stage', 'nextActionNote', 'actionDueDate', 'leadSource', 'venue'])
         && data.id is string && data.id.size() > 0 && data.id.size() <= 128
         && data.name is string && data.name.size() > 0 && data.name.size() <= 100
-        && data.phone is string && data.phone.size() >= 5 && data.phone.size() <= 30
-        && data.stage in ['Inquired', 'Trial', 'First Follow-up', 'Second Follow-up', 'Second Trial', 'Converted', 'Redundant']
-        && data.nextActionNote is string && data.nextActionNote.size() <= 500
-        && data.actionDueDate is string && data.actionDueDate.size() <= 30
-        && data.leadSource is string && data.leadSource.size() > 0 && data.leadSource.size() <= 60
-        && data.venue is string && data.venue.size() > 0 && data.venue.size() <= 60;
+        && data.phone is string && data.phone.size() >= 3 && data.phone.size() <= 40
+        && data.stage in ['Inquired', 'Trial', 'First Follow-up', 'Second Follow-up', 'Second Trial', 'Third Follow-up', 'Call on Custom Date', 'Converted', 'Redundant']
+        && data.nextActionNote is string && data.nextActionNote.size() <= 1000
+        && data.actionDueDate is string && data.actionDueDate.size() <= 40
+        && data.leadSource is string && data.leadSource.size() > 0 && data.leadSource.size() <= 80
+        && data.venue is string && data.venue.size() > 0 && data.venue.size() <= 80;
     }
 
     function isValidUserSettings(data) {

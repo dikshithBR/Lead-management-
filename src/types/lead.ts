@@ -4,6 +4,7 @@ export type PipelineStage =
   | 'First Follow-up'
   | 'Second Follow-up'
   | 'Second Trial'
+  | 'Third Follow-up'
   | 'Call on Custom Date'
   | 'Converted'
   | 'Redundant';
@@ -14,6 +15,7 @@ export const ALL_STAGES: PipelineStage[] = [
   'First Follow-up',
   'Second Follow-up',
   'Second Trial',
+  'Third Follow-up',
   'Call on Custom Date',
   'Converted',
   'Redundant',

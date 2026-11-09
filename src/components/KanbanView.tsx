@@ -15,8 +15,9 @@ import {
 } from 'lucide-react';
 import { Lead, PipelineStage, ALL_STAGES } from '../types/lead';
 import { useLeadContext } from '../context/LeadContext';
-import { formatDueDateLabel, formatWhatsAppUrl } from '../utils/dateUtils';
+import { formatDueDateLabel, formatWhatsAppUrl, openWhatsApp, STAGE_PROGRESSION } from '../utils/dateUtils';
 import { ScheduleCallModal } from './ScheduleCallModal';
+import { ReturnToPipelineModal } from './ReturnToPipelineModal';
 
 interface KanbanViewProps {
   onEditLead: (lead: Lead) => void;
@@ -29,10 +30,11 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   onRequestDelete,
   onOpenAddModalWithStage,
 }) => {
-  const { leads, changeStage } = useLeadContext();
+  const { leads, changeStage, advanceToNextStage } = useLeadContext();
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<PipelineStage | null>(null);
   const [schedulingLead, setSchedulingLead] = useState<Lead | null>(null);
+  const [returnLead, setReturnLead] = useState<Lead | null>(null);
 
   // Drag handlers
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
@@ -105,6 +107,11 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
         return {
           accent: 'border-amber-500/30 text-amber-400 bg-amber-500/10',
           dot: 'bg-amber-400',
+        };
+      case 'Third Follow-up':
+        return {
+          accent: 'border-teal-500/30 text-teal-300 bg-teal-500/10',
+          dot: 'bg-teal-400',
         };
       case 'Call on Custom Date':
         return {
@@ -221,12 +228,15 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                             </a>
                             <a
                               href={waUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-emerald-400 hover:text-emerald-300 p-0.5 rounded bg-emerald-500/10 border border-emerald-500/20"
-                              title="Open WhatsApp"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openWhatsApp(lead.phone, lead.name, lead.venue, 'business');
+                              }}
+                              className="text-emerald-400 hover:text-emerald-300 px-1 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1 cursor-pointer"
+                              title="Open in WhatsApp Business"
                             >
                               <MessageSquare className="w-3 h-3" />
+                              <span className="text-[9px] font-semibold">WA Business</span>
                             </a>
                           </div>
 
@@ -283,26 +293,45 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                                 ))}
                               </select>
 
-                              {lead.stage === 'Call on Custom Date' && (
-                                <button
-                                  onClick={() => setSchedulingLead(lead)}
-                                  className="p-1 text-violet-400 hover:text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 rounded border border-violet-500/20 transition-colors"
-                                  title="Reschedule Custom Call Date"
-                                >
-                                  <Calendar className="w-3 h-3" />
-                                </button>
+                              {lead.stage === 'Call on Custom Date' ? (
+                                <>
+                                  <button
+                                    onClick={() => setReturnLead(lead)}
+                                    className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-600/25 text-blue-300 border border-blue-500/35 hover:bg-blue-600/40 transition-colors cursor-pointer"
+                                    title="Call finished: Add client back to pipeline"
+                                  >
+                                    Pipeline ➔
+                                  </button>
+                                  <button
+                                    onClick={() => setSchedulingLead(lead)}
+                                    className="p-1 text-violet-400 hover:text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 rounded border border-violet-500/20 transition-colors cursor-pointer"
+                                    title="Reschedule Custom Call Date"
+                                  >
+                                    <Calendar className="w-3 h-3" />
+                                  </button>
+                                </>
+                              ) : (
+                                STAGE_PROGRESSION[lead.stage]?.nextStage && (
+                                  <button
+                                    onClick={() => advanceToNextStage(lead.id)}
+                                    className="p-1 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded border border-blue-500/20 transition-colors cursor-pointer"
+                                    title={`Advance to ${STAGE_PROGRESSION[lead.stage].nextStage} (${STAGE_PROGRESSION[lead.stage].intervalText})`}
+                                  >
+                                    <ArrowRight className="w-3 h-3" />
+                                  </button>
+                                )
                               )}
 
                               <button
                                 onClick={() => onEditLead(lead)}
-                                className="p-1 text-slate-400 hover:text-blue-400 rounded transition-colors"
+                                className="p-1 text-slate-400 hover:text-blue-400 rounded transition-colors cursor-pointer"
                                 title="Edit"
                               >
                                 <Edit2 className="w-3 h-3" />
                               </button>
                               <button
                                 onClick={() => onRequestDelete(lead)}
-                                className="p-1 text-slate-400 hover:text-rose-400 rounded transition-colors"
+                                className="p-1 text-slate-400 hover:text-rose-400 rounded transition-colors cursor-pointer"
                                 title="Delete"
                               >
                                 <Trash2 className="w-3 h-3" />
@@ -332,6 +361,20 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
             await changeStage(schedulingLead.id, 'Call on Custom Date', {
               actionDueDate: customDate,
               nextActionNote: customNote,
+            });
+          }
+        }}
+      />
+
+      {/* Return to Pipeline Modal for Call on Custom Date leads */}
+      <ReturnToPipelineModal
+        isOpen={!!returnLead}
+        onClose={() => setReturnLead(null)}
+        lead={returnLead}
+        onConfirm={async (targetStage, callOutcomeNote) => {
+          if (returnLead) {
+            await changeStage(returnLead.id, targetStage, {
+              nextActionNote: callOutcomeNote,
             });
           }
         }}

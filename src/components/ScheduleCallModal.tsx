@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Phone, Clock, MessageSquare, Check, Sparkles } from 'lucide-react';
 import { Lead, PipelineStage } from '../types/lead';
-import { getTodayDateString, offsetDateString, formatWhatsAppUrl } from '../utils/dateUtils';
+import { getTodayDateString, offsetDateString, formatWhatsAppUrl, openWhatsApp } from '../utils/dateUtils';
 
 interface ScheduleCallModalProps {
   isOpen: boolean;
@@ -105,12 +105,15 @@ export const ScheduleCallModal: React.FC<ScheduleCallModalProps> = ({
             </a>
             <a
               href={waUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20 transition-colors"
-              title="Chat on WhatsApp"
+              onClick={(e) => {
+                e.preventDefault();
+                openWhatsApp(lead.phone, lead.name, lead.venue, 'business');
+              }}
+              className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20 transition-colors flex items-center gap-1 text-xs cursor-pointer"
+              title="Chat on WhatsApp Business"
             >
               <MessageSquare className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-semibold">WA Business</span>
             </a>
           </div>
         </div>

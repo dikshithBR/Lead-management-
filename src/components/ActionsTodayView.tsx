@@ -18,8 +18,14 @@ import {
 } from 'lucide-react';
 import { Lead, PipelineStage, ALL_STAGES } from '../types/lead';
 import { useLeadContext } from '../context/LeadContext';
-import { formatDueDateLabel, formatWhatsAppUrl } from '../utils/dateUtils';
+import {
+  formatDueDateLabel,
+  formatWhatsAppUrl,
+  openWhatsApp,
+  STAGE_PROGRESSION,
+} from '../utils/dateUtils';
 import { ScheduleCallModal } from './ScheduleCallModal';
+import { ReturnToPipelineModal } from './ReturnToPipelineModal';
 
 type ActionSubFilter = 'due_or_overdue' | 'upcoming' | 'completed_today';
 
@@ -38,10 +44,12 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
     markActionDone,
     rescheduleLead,
     changeStage,
+    advanceToNextStage,
   } = useLeadContext();
 
   const [subFilter, setSubFilter] = useState<ActionSubFilter>('due_or_overdue');
   const [schedulingLead, setSchedulingLead] = useState<Lead | null>(null);
+  const [returnLead, setReturnLead] = useState<Lead | null>(null);
 
   const filteredActionLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -79,6 +87,8 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
         return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
       case 'Second Trial':
         return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      case 'Third Follow-up':
+        return 'bg-teal-500/15 text-teal-300 border-teal-500/30';
       case 'Call on Custom Date':
         return 'bg-violet-500/15 text-violet-300 border-violet-500/30';
       case 'Converted':
@@ -268,16 +278,18 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
                         <span>{lead.phone}</span>
                       </a>
 
-                      {/* DEDICATED GREEN WHATSAPP BUTTON (Prompt Requirement) */}
+                      {/* DEDICATED GREEN WHATSAPP BUSINESS BUTTON */}
                       <a
                         href={waUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          openWhatsApp(lead.phone, lead.name, lead.venue, 'business');
+                        }}
                         className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all transform active:scale-95 cursor-pointer"
-                        title="Redirect directly to WhatsApp with pre-filled greeting"
+                        title="Open directly in WhatsApp Business with pre-filled greeting"
                       >
                         <MessageSquare className="w-3.5 h-3.5 fill-current" />
-                        <span>WhatsApp</span>
+                        <span>WA Business</span>
                       </a>
 
                       {/* Urgency Badge */}
@@ -325,18 +337,54 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
                   {/* Right Column: Quick Action Controls */}
                   <div className="flex flex-wrap lg:flex-col items-center lg:items-end gap-2 shrink-0 border-t lg:border-t-0 lg:border-l border-white/[0.06] pt-3 lg:pt-0 lg:pl-4">
                     
-                    {/* Mark Done Button */}
-                    <button
-                      onClick={() => markActionDone(lead.id)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                        lead.isCompletedToday
-                          ? 'bg-emerald-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]'
-                          : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30'
-                      }`}
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>{lead.isCompletedToday ? 'Done' : 'Mark Done'}</span>
-                    </button>
+                    {/* Mark Done & Workflow Progression Buttons */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        onClick={() => markActionDone(lead.id)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                          lead.isCompletedToday
+                            ? 'bg-emerald-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                            : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30'
+                        }`}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{lead.isCompletedToday ? 'Done' : 'Mark Done'}</span>
+                      </button>
+
+                      {/* 1-Click Advance to Next Enforced Stage */}
+                      {lead.stage === 'Call on Custom Date' ? (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => setReturnLead(lead)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-600/30 transition-all cursor-pointer"
+                            title="Call completed: Add client back to pipeline"
+                          >
+                            <ArrowRight className="w-3.5 h-3.5" />
+                            <span>Return to Pipeline</span>
+                          </button>
+                          {urgency.status === 'overdue' && (
+                            <button
+                              onClick={() => rescheduleLead(lead.id, 1)}
+                              className="px-2 py-1.5 rounded-xl text-xs font-mono font-medium bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition-colors cursor-pointer"
+                              title="Missed call: Rollover to next day (+1d)"
+                            >
+                              +1d Missed
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        STAGE_PROGRESSION[lead.stage]?.nextStage && (
+                          <button
+                            onClick={() => advanceToNextStage(lead.id)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 hover:border-blue-400/50 shadow-sm transition-all cursor-pointer"
+                            title={`Advance to ${STAGE_PROGRESSION[lead.stage].nextStage} (${STAGE_PROGRESSION[lead.stage].intervalText})`}
+                          >
+                            <ArrowRight className="w-3.5 h-3.5 text-blue-400" />
+                            <span>Advance: {STAGE_PROGRESSION[lead.stage].nextStage} ({STAGE_PROGRESSION[lead.stage].intervalText})</span>
+                          </button>
+                        )
+                      )}
+                    </div>
 
                     {/* Reschedule Shortcuts */}
                     <div className="flex items-center gap-1.5">
@@ -413,6 +461,20 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
             await changeStage(schedulingLead.id, 'Call on Custom Date', {
               actionDueDate: customDate,
               nextActionNote: customNote,
+            });
+          }
+        }}
+      />
+
+      {/* Return to Pipeline Modal for Call on Custom Date leads */}
+      <ReturnToPipelineModal
+        isOpen={!!returnLead}
+        onClose={() => setReturnLead(null)}
+        lead={returnLead}
+        onConfirm={async (targetStage, callOutcomeNote) => {
+          if (returnLead) {
+            await changeStage(returnLead.id, targetStage, {
+              nextActionNote: callOutcomeNote,
             });
           }
         }}
