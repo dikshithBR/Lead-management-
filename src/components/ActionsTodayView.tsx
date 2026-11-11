@@ -77,6 +77,8 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
 
   const getStageBadgeClass = (stage: PipelineStage) => {
     switch (stage) {
+      case 'Completed':
+        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
       case 'Inquired':
         return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
       case 'Trial':
@@ -89,8 +91,14 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
         return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
       case 'Third Follow-up':
         return 'bg-teal-500/15 text-teal-300 border-teal-500/30';
-      case 'Call on Custom Date':
+      case 'Fourth Follow-up':
+        return 'bg-sky-500/15 text-sky-300 border-sky-500/30';
+      case 'Fifth Follow-up':
+        return 'bg-orange-500/15 text-orange-300 border-orange-500/30';
+      case 'Sixth Follow-up':
         return 'bg-violet-500/15 text-violet-300 border-violet-500/30';
+      case 'Call on Custom Date':
+        return 'bg-purple-500/15 text-purple-300 border-purple-500/30';
       case 'Converted':
         return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
       case 'Redundant':
@@ -278,18 +286,27 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
                         <span>{lead.phone}</span>
                       </a>
 
-                      {/* DEDICATED GREEN WHATSAPP BUSINESS BUTTON */}
+                      {/* DEDICATED GREEN WHATSAPP BUSINESS BUTTON (Android & iOS Native Intent Ready) */}
                       <a
                         href={waUrl}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          openWhatsApp(lead.phone, lead.name, lead.venue, 'business');
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all transform active:scale-95 cursor-pointer"
+                        target={typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? undefined : "_blank"}
+                        rel={typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? undefined : "noopener noreferrer"}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all transform active:scale-95"
                         title="Open directly in WhatsApp Business with pre-filled greeting"
                       >
                         <MessageSquare className="w-3.5 h-3.5 fill-current" />
                         <span>WA Business</span>
+                      </a>
+
+                      {/* Standard Personal WhatsApp Fallback */}
+                      <a
+                        href={formatWhatsAppUrl(lead.phone, lead.name, lead.venue, 'standard')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-[#090f1d] hover:bg-[#132347] border border-white/[0.08] text-slate-400 hover:text-emerald-400 text-xs transition-colors"
+                        title="Open in Standard WhatsApp"
+                      >
+                        <span>Personal WA</span>
                       </a>
 
                       {/* Urgency Badge */}
@@ -306,7 +323,7 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
                       </span>
                     </div>
 
-                    {/* Metadata Badges: Venue, Source, Stage */}
+                    {/* Metadata Badges: Venue, Source, Stage, Outreach Sequence */}
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.04] text-slate-300 border border-white/[0.06] text-xs">
                         <MapPin className="w-3 h-3 text-blue-400 shrink-0" />
@@ -321,6 +338,16 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
                       <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${getStageBadgeClass(lead.stage)}`}>
                         {lead.stage}
                       </span>
+
+                      {/* Outreach Sequence Indicator */}
+                      {lead.outreachStep && (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                          {lead.outreachStep === 1 && 'Step 1/3 (Initial +3d)'}
+                          {lead.outreachStep === 2 && 'Step 2/3 (Trial Offer +2d)'}
+                          {lead.outreachStep === 3 && 'Step 3/3 (Final Trial Offer)'}
+                          {lead.outreachStep === 4 && 'Outreach Executed • Due Today for Redundant'}
+                        </span>
+                      )}
                     </div>
 
                     {/* Highlighted Action Note Box */}
@@ -339,6 +366,7 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
                     
                     {/* Mark Done & Workflow Progression Buttons */}
                     <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* Mark Done button with context-aware progression label */}
                       <button
                         onClick={() => markActionDone(lead.id)}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
@@ -346,10 +374,54 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
                             ? 'bg-emerald-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]'
                             : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30'
                         }`}
+                        title="Mark current follow-up action done"
                       >
                         <Check className="w-3.5 h-3.5" />
-                        <span>{lead.isCompletedToday ? 'Done' : 'Mark Done'}</span>
+                        <span>
+                          {lead.outreachStep === 1
+                            ? 'Outreach 1 Done (+2d)'
+                            : lead.outreachStep === 2
+                            ? 'Outreach 2 Done (+2d)'
+                            : lead.outreachStep === 3
+                            ? 'Execute 3rd Outreach'
+                            : lead.stage === 'Trial'
+                            ? 'Trial Done ➔ 1st Follow-up (+1d)'
+                            : lead.stage === 'First Follow-up'
+                            ? '1st Follow-up Done ➔ 2nd Follow-up (+2d)'
+                            : lead.stage === 'Second Follow-up'
+                            ? '2nd Follow-up Done (+2d wait)'
+                            : lead.stage === 'Second Trial'
+                            ? '2nd Trial Done ➔ 3rd Follow-up (+1d)'
+                            : lead.stage === 'Third Follow-up'
+                            ? '3rd Follow-up Done ➔ 4th Follow-up (+1d)'
+                            : lead.stage === 'Fourth Follow-up'
+                            ? '4th Follow-up Done (+2d wait)'
+                            : lead.stage === 'Call on Custom Date'
+                            ? 'Call Done ➔ 5th Follow-up (+2d)'
+                            : lead.stage === 'Fifth Follow-up'
+                            ? '5th Follow-up Done ➔ 6th Follow-up (+1d)'
+                            : lead.stage === 'Sixth Follow-up'
+                            ? '6th Follow-up Done (+2d wait)'
+                            : lead.isCompletedToday
+                            ? 'Done'
+                            : 'Mark Done'}
+                        </span>
                       </button>
+
+                      {/* Manual Redundant Action Button for leads at end of sequences */}
+                      {(lead.outreachStep === 4 ||
+                        lead.stage === 'Second Follow-up' ||
+                        lead.stage === 'Fourth Follow-up' ||
+                        lead.stage === 'Sixth Follow-up') && (
+                        <button
+                          onClick={() => changeStage(lead.id, 'Redundant')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-600/25 hover:bg-rose-600/40 text-rose-200 border border-rose-500/40 shadow-sm transition-all cursor-pointer"
+                          title="Manually push lead to Redundant stage"
+                        >
+                          <ArrowRight className="w-3.5 h-3.5 text-rose-300" />
+                          <span>Mark Redundant (Manual)</span>
+                        </button>
+                      )}
 
                       {/* 1-Click Advance to Next Enforced Stage */}
                       {lead.stage === 'Call on Custom Date' ? (
@@ -362,6 +434,13 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
                             <ArrowRight className="w-3.5 h-3.5" />
                             <span>Return to Pipeline</span>
                           </button>
+                          <button
+                            onClick={() => changeStage(lead.id, 'Fifth Follow-up')}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-all cursor-pointer"
+                            title="Missed or no response on call: Advance to 5th Follow-up (+2d)"
+                          >
+                            <span>No Response (+2d)</span>
+                          </button>
                           {urgency.status === 'overdue' && (
                             <button
                               onClick={() => rescheduleLead(lead.id, 1)}
@@ -373,7 +452,10 @@ export const ActionsTodayView: React.FC<ActionsTodayViewProps> = ({
                           )}
                         </div>
                       ) : (
-                        STAGE_PROGRESSION[lead.stage]?.nextStage && (
+                        STAGE_PROGRESSION[lead.stage]?.nextStage &&
+                        lead.stage !== 'Second Follow-up' &&
+                        lead.stage !== 'Fourth Follow-up' &&
+                        lead.stage !== 'Sixth Follow-up' && (
                           <button
                             onClick={() => advanceToNextStage(lead.id)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 hover:border-blue-400/50 shadow-sm transition-all cursor-pointer"

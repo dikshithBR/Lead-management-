@@ -1,21 +1,29 @@
 export type PipelineStage =
+  | 'Completed'
   | 'Inquired'
   | 'Trial'
   | 'First Follow-up'
   | 'Second Follow-up'
   | 'Second Trial'
   | 'Third Follow-up'
+  | 'Fourth Follow-up'
+  | 'Fifth Follow-up'
+  | 'Sixth Follow-up'
   | 'Call on Custom Date'
   | 'Converted'
   | 'Redundant';
 
 export const ALL_STAGES: PipelineStage[] = [
+  'Completed',
   'Inquired',
   'Trial',
   'First Follow-up',
   'Second Follow-up',
   'Second Trial',
   'Third Follow-up',
+  'Fourth Follow-up',
+  'Fifth Follow-up',
+  'Sixth Follow-up',
   'Call on Custom Date',
   'Converted',
   'Redundant',
@@ -31,6 +39,7 @@ export interface Lead {
   leadSource: string;
   venue: string;
   ownerId: string;
+  outreachStep?: number; // 1 = 1st reminder (+3d), 2 = 2nd outreach trial offer (+2d), 3 = 3rd trial offer (+2d), 4 = executed awaiting manual Redundant
   isCompletedToday?: boolean;
   completedAt?: string;
   createdAt: string;

@@ -83,6 +83,11 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
 
   const getStageHeaderStyle = (stage: PipelineStage) => {
     switch (stage) {
+      case 'Completed':
+        return {
+          accent: 'border-emerald-500/30 text-emerald-300 bg-emerald-500/10',
+          dot: 'bg-emerald-400',
+        };
       case 'Inquired':
         return {
           accent: 'border-blue-500/30 text-blue-400 bg-blue-500/10',
@@ -113,10 +118,25 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
           accent: 'border-teal-500/30 text-teal-300 bg-teal-500/10',
           dot: 'bg-teal-400',
         };
+      case 'Fourth Follow-up':
+        return {
+          accent: 'border-sky-500/30 text-sky-300 bg-sky-500/10',
+          dot: 'bg-sky-400',
+        };
+      case 'Fifth Follow-up':
+        return {
+          accent: 'border-orange-500/30 text-orange-300 bg-orange-500/10',
+          dot: 'bg-orange-400',
+        };
+      case 'Sixth Follow-up':
+        return {
+          accent: 'border-violet-500/30 text-violet-300 bg-violet-500/10',
+          dot: 'bg-violet-400',
+        };
       case 'Call on Custom Date':
         return {
-          accent: 'border-violet-500/40 text-violet-300 bg-violet-500/15 shadow-[0_0_15px_rgba(139,92,246,0.25)]',
-          dot: 'bg-violet-400',
+          accent: 'border-purple-500/40 text-purple-300 bg-purple-500/15 shadow-[0_0_15px_rgba(168,85,247,0.25)]',
+          dot: 'bg-purple-400',
         };
       case 'Converted':
         return {
@@ -131,12 +151,14 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
     }
   };
 
+  const kanbanStages = ALL_STAGES.filter((stage) => stage !== 'Completed');
+
   return (
     <div className="space-y-3">
       {/* Kanban Board Horizontal Scrolling Canvas */}
       <div className="overflow-x-auto pb-4 scrollbar-thin">
         <div className="flex gap-4 min-w-[2000px] items-start">
-          {ALL_STAGES.map((stage) => {
+          {kanbanStages.map((stage) => {
             const stageLeads = leads.filter((l) => l.stage === stage);
             const isTargetColumn = dragOverStage === stage;
             const style = getStageHeaderStyle(stage);
@@ -228,14 +250,12 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                             </a>
                             <a
                               href={waUrl}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                openWhatsApp(lead.phone, lead.name, lead.venue, 'business');
-                              }}
-                              className="text-emerald-400 hover:text-emerald-300 px-1 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1 cursor-pointer"
-                              title="Open in WhatsApp Business"
+                              target={typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? undefined : "_blank"}
+                              rel={typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? undefined : "noopener noreferrer"}
+                              className="text-emerald-400 hover:text-emerald-300 px-1 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-1 cursor-pointer"
+                              title="Open directly in WhatsApp Business"
                             >
-                              <MessageSquare className="w-3 h-3" />
+                              <MessageSquare className="w-3 h-3 fill-current" />
                               <span className="text-[9px] font-semibold">WA Business</span>
                             </a>
                           </div>
@@ -286,7 +306,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                                 className="text-[10px] py-0.5 px-1 bg-[#18274b] border border-white/[0.08] text-slate-300 rounded focus:border-blue-500 cursor-pointer"
                                 title="Change Stage"
                               >
-                                {ALL_STAGES.map((s) => (
+                                {kanbanStages.map((s) => (
                                   <option key={s} value={s}>
                                     {s}
                                   </option>
@@ -310,6 +330,17 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                                     <Calendar className="w-3 h-3" />
                                   </button>
                                 </>
+                              ) : (lead.outreachStep === 4 ||
+                                   lead.stage === 'Second Follow-up' ||
+                                   lead.stage === 'Fourth Follow-up' ||
+                                   lead.stage === 'Sixth Follow-up') ? (
+                                <button
+                                  onClick={() => changeStage(lead.id, 'Redundant')}
+                                  className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/25 text-rose-300 border border-rose-500/35 hover:bg-rose-500/40 transition-colors cursor-pointer"
+                                  title="Manually push lead to Redundant stage"
+                                >
+                                  Redundant
+                                </button>
                               ) : (
                                 STAGE_PROGRESSION[lead.stage]?.nextStage && (
                                   <button

@@ -20,6 +20,13 @@ interface StageOption {
 
 const RETURN_OPTIONS: StageOption[] = [
   {
+    stage: 'Fifth Follow-up',
+    label: '5th Follow-up (No Response)',
+    deadlineText: 'Due in 2 Days',
+    badgeClass: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+    description: 'Call missed / no response. Follow up again in 2 days.',
+  },
+  {
     stage: 'Trial',
     label: 'Trial Session',
     deadlineText: 'Due in 1 Day',
@@ -29,9 +36,9 @@ const RETURN_OPTIONS: StageOption[] = [
   {
     stage: 'First Follow-up',
     label: '1st Follow-up',
-    deadlineText: 'Due in 12 Hours',
+    deadlineText: 'Due in 1 Day',
     badgeClass: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
-    description: 'Trial completed; follow-up scheduled within 12 hours.',
+    description: 'Trial completed; follow-up scheduled within 1 day.',
   },
   {
     stage: 'Second Follow-up',
@@ -50,9 +57,23 @@ const RETURN_OPTIONS: StageOption[] = [
   {
     stage: 'Third Follow-up',
     label: '3rd Follow-up',
-    deadlineText: 'Due in 12 Hours',
+    deadlineText: 'Due in 1 Day',
     badgeClass: 'bg-teal-500/15 text-teal-300 border-teal-500/30',
-    description: 'Post-2nd-trial closing follow-up within 12 hours.',
+    description: 'Post-2nd-trial closing follow-up within 1 day.',
+  },
+  {
+    stage: 'Fourth Follow-up',
+    label: '4th Follow-up',
+    deadlineText: 'Due in 1 Day',
+    badgeClass: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
+    description: 'Follow-up on finalized package offer.',
+  },
+  {
+    stage: 'Sixth Follow-up',
+    label: '6th Follow-up',
+    deadlineText: 'Due in 1 Day',
+    badgeClass: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
+    description: 'Final follow-up attempt before redundancy review.',
   },
   {
     stage: 'Converted',
@@ -135,14 +156,12 @@ export const ReturnToPipelineModal: React.FC<ReturnToPipelineModalProps> = ({
             </a>
             <a
               href={waUrl}
-              onClick={(e) => {
-                e.preventDefault();
-                openWhatsApp(lead.phone, lead.name, lead.venue, 'business');
-              }}
-              className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20 transition-colors flex items-center gap-1 text-xs cursor-pointer"
+              target={typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? undefined : "_blank"}
+              rel={typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? undefined : "noopener noreferrer"}
+              className="px-2 py-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 rounded-lg border border-emerald-500/30 transition-colors flex items-center gap-1 text-xs cursor-pointer"
               title="Chat on WhatsApp Business"
             >
-              <MessageSquare className="w-3.5 h-3.5" />
+              <MessageSquare className="w-3.5 h-3.5 fill-current" />
               <span className="text-[10px] font-semibold">WA Business</span>
             </a>
           </div>

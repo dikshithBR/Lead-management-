@@ -15,7 +15,7 @@ service cloud.firestore {
         && data.id is string && data.id.size() > 0 && data.id.size() <= 128
         && data.name is string && data.name.size() > 0 && data.name.size() <= 100
         && data.phone is string && data.phone.size() >= 3 && data.phone.size() <= 40
-        && data.stage in ['Inquired', 'Trial', 'First Follow-up', 'Second Follow-up', 'Second Trial', 'Third Follow-up', 'Call on Custom Date', 'Converted', 'Redundant']
+        && data.stage in ['Completed', 'Inquired', 'Trial', 'First Follow-up', 'Second Follow-up', 'Second Trial', 'Third Follow-up', 'Fourth Follow-up', 'Fifth Follow-up', 'Sixth Follow-up', 'Call on Custom Date', 'Converted', 'Redundant']
         && data.nextActionNote is string && data.nextActionNote.size() <= 1000
         && data.actionDueDate is string && data.actionDueDate.size() <= 40
         && data.leadSource is string && data.leadSource.size() > 0 && data.leadSource.size() <= 80

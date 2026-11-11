@@ -15,7 +15,7 @@ export const LeadModal: React.FC<LeadModalProps> = ({
   isOpen,
   onClose,
   leadToEdit,
-  initialStage = 'Inquired',
+  initialStage = 'Completed',
 }) => {
   const {
     allSources,
@@ -30,7 +30,7 @@ export const LeadModal: React.FC<LeadModalProps> = ({
   const [phone, setPhone] = useState('');
   const [stage, setStage] = useState<PipelineStage>(initialStage);
   const [nextActionNote, setNextActionNote] = useState('');
-  const [actionDueDate, setActionDueDate] = useState(getTodayDateString());
+  const [actionDueDate, setActionDueDate] = useState(offsetDateString(getTodayDateString(), 3));
   const [leadSource, setLeadSource] = useState(allSources[0] || 'Website Direct');
   const [venue, setVenue] = useState(allVenues[0] || 'Downtown Executive Hub');
 
@@ -46,6 +46,7 @@ export const LeadModal: React.FC<LeadModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    const today = getTodayDateString();
     if (leadToEdit) {
       setName(leadToEdit.name);
       setPhone(leadToEdit.phone);
@@ -55,11 +56,18 @@ export const LeadModal: React.FC<LeadModalProps> = ({
       setLeadSource(leadToEdit.leadSource);
       setVenue(leadToEdit.venue);
     } else {
+      const defStage = initialStage || 'Completed';
       setName('');
       setPhone('');
-      setStage(initialStage);
-      setNextActionNote('Initial discovery call & qualification of client requirements.');
-      setActionDueDate(getTodayDateString());
+      setStage(defStage);
+      if (defStage === 'Completed') {
+        setNextActionNote('1st Outreach Reminder: Initial check-in');
+        setActionDueDate(offsetDateString(today, 3));
+      } else {
+        const rule = calculateTargetStageDeadline(defStage);
+        setNextActionNote(rule.note);
+        setActionDueDate(rule.dueDateStr);
+      }
       setLeadSource(allSources[0] || 'Website Direct');
       setVenue(allVenues[0] || 'Downtown Executive Hub');
     }
@@ -129,6 +137,7 @@ export const LeadModal: React.FC<LeadModalProps> = ({
           actionDueDate,
           leadSource,
           venue,
+          outreachStep: stage === 'Completed' ? 1 : undefined,
         });
       }
       onClose();

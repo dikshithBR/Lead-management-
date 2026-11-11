@@ -26,12 +26,16 @@
           "type": "string",
           "description": "Current pipeline stage of the lead",
           "enum": [
+            "Completed",
             "Inquired",
             "Trial",
             "First Follow-up",
             "Second Follow-up",
             "Second Trial",
             "Third Follow-up",
+            "Fourth Follow-up",
+            "Fifth Follow-up",
+            "Sixth Follow-up",
             "Call on Custom Date",
             "Converted",
             "Redundant"

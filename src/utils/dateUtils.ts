@@ -20,6 +20,11 @@ export const STAGE_PROGRESSION: Record<
   PipelineStage,
   { nextStage: PipelineStage | null; intervalText: string; defaultAction: string }
 > = {
+  'Completed': {
+    nextStage: null,
+    intervalText: '3 Days',
+    defaultAction: '1st Outreach Reminder: Initial check-in',
+  },
   'Inquired': {
     nextStage: 'Trial',
     intervalText: '1 Day',
@@ -27,33 +32,48 @@ export const STAGE_PROGRESSION: Record<
   },
   'Trial': {
     nextStage: 'First Follow-up',
-    intervalText: '12 Hours',
-    defaultAction: 'First follow-up call to check trial experience & feedback',
+    intervalText: '1 Day',
+    defaultAction: '1st follow-up call after trial (1 day window)',
   },
   'First Follow-up': {
     nextStage: 'Second Follow-up',
     intervalText: '2 Days',
-    defaultAction: 'Second follow-up to address questions & discuss package terms',
+    defaultAction: '2nd follow-up to address questions & discuss package terms (2 days window)',
   },
   'Second Follow-up': {
-    nextStage: 'Second Trial',
+    nextStage: 'Redundant',
     intervalText: '2 Days',
-    defaultAction: 'Second trial / deep dive session booking',
+    defaultAction: '2nd follow-up done. No response after 2 days -> manually push to Redundant',
   },
   'Second Trial': {
     nextStage: 'Third Follow-up',
-    intervalText: '12 Hours',
-    defaultAction: 'Third follow-up call after second trial to close membership',
+    intervalText: '1 Day',
+    defaultAction: '3rd follow-up call after 2nd trial to review session (1 day)',
   },
   'Third Follow-up': {
-    nextStage: 'Converted',
-    intervalText: 'Final Closing',
-    defaultAction: 'Final closing review & contract sign-off',
+    nextStage: 'Fourth Follow-up',
+    intervalText: '1 Day',
+    defaultAction: '4th follow-up call on package offer (1 day)',
+  },
+  'Fourth Follow-up': {
+    nextStage: 'Redundant',
+    intervalText: '2 Days',
+    defaultAction: '4th follow-up done. No response after 2 days -> manually push to Redundant',
   },
   'Call on Custom Date': {
-    nextStage: null,
-    intervalText: 'Custom Date',
-    defaultAction: 'Client requested scheduled call-back',
+    nextStage: 'Fifth Follow-up',
+    intervalText: '2 Days',
+    defaultAction: 'Scheduled call date reminder. If no response, advance to 5th Follow-up (2 days)',
+  },
+  'Fifth Follow-up': {
+    nextStage: 'Sixth Follow-up',
+    intervalText: '1 Day',
+    defaultAction: '5th follow-up call after missed custom call (1 day to 6th)',
+  },
+  'Sixth Follow-up': {
+    nextStage: 'Redundant',
+    intervalText: '2 Days',
+    defaultAction: '6th follow-up done. No response after 2 days -> manually push to Redundant',
   },
   'Converted': {
     nextStage: null,
@@ -69,20 +89,30 @@ export const STAGE_PROGRESSION: Record<
 
 /**
  * Calculates deadline for a target pipeline stage based on strict workflow rules:
+ * - Completed: 3 days (initial outreach reminder)
  * - Trial: 1 day
- * - First Follow-up: 12 hours (today evening if before 1 PM, else tomorrow morning)
- * - Second Follow-up: 2 days
+ * - First Follow-up: 1 day window after 1st trial
+ * - Second Follow-up: 2 days window if no response
  * - Second Trial: 2 days
- * - Third Follow-up: 12 hours (today evening if before 1 PM, else tomorrow morning)
+ * - Third Follow-up: 1 day window after 2nd trial
+ * - Fourth Follow-up: 1 day window after 3rd follow-up
+ * - Fifth Follow-up: 2 days window after scheduled custom call
+ * - Sixth Follow-up: 1 day window after 5th follow-up
  */
 export function calculateTargetStageDeadline(
   targetStage: PipelineStage,
   referenceDate: Date = new Date()
 ): { dueDateStr: string; note: string; label: string } {
   const todayStr = getTodayDateString(referenceDate);
-  const currentHour = referenceDate.getHours();
 
   switch (targetStage) {
+    case 'Completed':
+      return {
+        dueDateStr: offsetDateString(todayStr, 3),
+        note: '1st Outreach Reminder: Initial check-in',
+        label: '3 Days',
+      };
+
     case 'Trial':
       return {
         dueDateStr: offsetDateString(todayStr, 1),
@@ -91,26 +121,16 @@ export function calculateTargetStageDeadline(
       };
 
     case 'First Follow-up':
-      if (currentHour < 13) {
-        // Earlier than 1 PM -> 12 hours is today evening
-        return {
-          dueDateStr: todayStr,
-          note: '1st follow-up within 12h (Today evening)',
-          label: '12 Hours (Today)',
-        };
-      } else {
-        // After 1 PM -> 12 hours is tomorrow morning
-        return {
-          dueDateStr: offsetDateString(todayStr, 1),
-          note: '1st follow-up within 12h (Tomorrow morning)',
-          label: '12 Hours (Tomorrow)',
-        };
-      }
+      return {
+        dueDateStr: offsetDateString(todayStr, 1),
+        note: '1st Follow-up after trial (1 day window)',
+        label: '1 Day',
+      };
 
     case 'Second Follow-up':
       return {
         dueDateStr: offsetDateString(todayStr, 2),
-        note: '2nd follow-up scheduled in 2 days',
+        note: '2nd Follow-up if no response (2 days window)',
         label: '2 Days',
       };
 
@@ -122,19 +142,32 @@ export function calculateTargetStageDeadline(
       };
 
     case 'Third Follow-up':
-      if (currentHour < 13) {
-        return {
-          dueDateStr: todayStr,
-          note: '3rd follow-up within 12h (Today evening)',
-          label: '12 Hours (Today)',
-        };
-      } else {
-        return {
-          dueDateStr: offsetDateString(todayStr, 1),
-          note: '3rd follow-up within 12h (Tomorrow morning)',
-          label: '12 Hours (Tomorrow)',
-        };
-      }
+      return {
+        dueDateStr: offsetDateString(todayStr, 1),
+        note: '3rd Follow-up after 2nd trial (1 day window)',
+        label: '1 Day',
+      };
+
+    case 'Fourth Follow-up':
+      return {
+        dueDateStr: offsetDateString(todayStr, 1),
+        note: '4th Follow-up (1 day window)',
+        label: '1 Day',
+      };
+
+    case 'Fifth Follow-up':
+      return {
+        dueDateStr: offsetDateString(todayStr, 2),
+        note: '5th Follow-up after custom call (2 days window)',
+        label: '2 Days',
+      };
+
+    case 'Sixth Follow-up':
+      return {
+        dueDateStr: offsetDateString(todayStr, 1),
+        note: '6th Follow-up (1 day window)',
+        label: '1 Day',
+      };
 
     case 'Call on Custom Date':
       return {
@@ -158,7 +191,6 @@ export function calculateTargetStageDeadline(
       };
 
     case 'Inquired':
-    default:
       return {
         dueDateStr: todayStr,
         note: 'Initial inquiry received',
@@ -246,8 +278,26 @@ export function formatDueDateLabel(dueDateStr: string, referenceDate: Date = new
 export type WhatsAppType = 'business' | 'standard';
 
 /**
+ * Normalizes phone numbers for WhatsApp:
+ * - Strips non-digits
+ * - If 11 digits starting with 0 (e.g. 09876543210), converts to 919876543210
+ * - If 10 digits (standard Indian mobile without country code), prepends 91
+ * - Preserves standard international numbers with existing country codes (e.g. 919876543210, 15551234567)
+ */
+export function normalizePhoneNumber(phoneNumber: string): string {
+  if (!phoneNumber) return '';
+  let cleaned = phoneNumber.replace(/\D/g, '');
+  if (cleaned.startsWith('0') && cleaned.length === 11) {
+    cleaned = '91' + cleaned.slice(1);
+  } else if (cleaned.length === 10) {
+    cleaned = '91' + cleaned;
+  }
+  return cleaned;
+}
+
+/**
  * Formats a direct WhatsApp or WhatsApp Business link.
- * Defaults to WhatsApp Business (`com.whatsapp.w4b` on Android, `whatsapp-business://` on iOS, and web fallback).
+ * Targets WhatsApp Business (com.whatsapp.w4b on Android, whatsapp-business:// on iOS, api.whatsapp.com on desktop).
  */
 export function formatWhatsAppUrl(
   phoneNumber: string,
@@ -255,7 +305,7 @@ export function formatWhatsAppUrl(
   venue: string,
   appType: WhatsAppType = 'business'
 ): string {
-  const cleanedDigits = phoneNumber.replace(/\D/g, '');
+  const cleanedDigits = normalizePhoneNumber(phoneNumber);
   const greeting = `Hi ${clientName}, following up regarding your inquiry at ${venue}. How can we assist you today?`;
   const encodedMsg = encodeURIComponent(greeting);
 
@@ -266,9 +316,8 @@ export function formatWhatsAppUrl(
       const isIOS = /iPhone|iPad|iPod/i.test(ua);
 
       if (isAndroid) {
-        // Explicitly target WhatsApp Business package on Android
-        const fallback = encodeURIComponent(`https://api.whatsapp.com/send?phone=${cleanedDigits}&text=${encodedMsg}`);
-        return `intent://send?phone=${cleanedDigits}&text=${encodedMsg}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${fallback};end;`;
+        // Direct package-targeted Android Intent for WhatsApp Business
+        return `intent://send?phone=${cleanedDigits}&text=${encodedMsg}#Intent;package=com.whatsapp.w4b;scheme=whatsapp;end;`;
       }
 
       if (isIOS) {
@@ -276,7 +325,7 @@ export function formatWhatsAppUrl(
       }
     }
 
-    // Default universal link for desktop/other
+    // Default universal web / desktop link
     return `https://api.whatsapp.com/send?phone=${cleanedDigits}&text=${encodedMsg}`;
   }
 
@@ -295,45 +344,16 @@ export function openWhatsApp(
 ): void {
   if (typeof window === 'undefined') return;
 
-  const cleanedDigits = phoneNumber.replace(/\D/g, '');
-  const greeting = `Hi ${clientName}, following up regarding your inquiry at ${venue}. How can we assist you today?`;
-  const encodedMsg = encodeURIComponent(greeting);
-
+  const url = formatWhatsAppUrl(phoneNumber, clientName, venue, appType);
   const ua = navigator.userAgent || '';
   const isAndroid = /Android/i.test(ua);
   const isIOS = /iPhone|iPad|iPod/i.test(ua);
 
-  if (appType === 'business') {
-    if (isAndroid) {
-      // Force Android OS to launch WhatsApp Business package (com.whatsapp.w4b)
-      const fallbackUrl = encodeURIComponent(`https://api.whatsapp.com/send?phone=${cleanedDigits}&text=${encodedMsg}`);
-      window.location.href = `intent://send?phone=${cleanedDigits}&text=${encodedMsg}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${fallbackUrl};end;`;
-      return;
-    }
-
-    if (isIOS) {
-      // Attempt iOS WhatsApp Business custom URL scheme
-      const fallbackUrl = `https://api.whatsapp.com/send?phone=${cleanedDigits}&text=${encodedMsg}`;
-      const businessUrl = `whatsapp-business://send?phone=${cleanedDigits}&text=${encodedMsg}`;
-
-      const start = Date.now();
-      window.location.href = businessUrl;
-
-      setTimeout(() => {
-        // If app switch didn't blur page within 1.5s, open fallback
-        if (Date.now() - start < 2200) {
-          window.location.href = fallbackUrl;
-        }
-      }, 1500);
-      return;
-    }
-
-    // Desktop: open WhatsApp Web
-    window.open(`https://web.whatsapp.com/send?phone=${cleanedDigits}&text=${encodedMsg}`, '_blank', 'noopener,noreferrer');
-    return;
+  if (isAndroid || isIOS) {
+    window.location.href = url;
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
-
-  // Standard WhatsApp
-  window.open(`https://wa.me/${cleanedDigits}?text=${encodedMsg}`, '_blank', 'noopener,noreferrer');
 }
+
 

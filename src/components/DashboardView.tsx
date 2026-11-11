@@ -109,6 +109,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const getStageColorBadge = (stage: PipelineStage) => {
     switch (stage) {
+      case 'Completed':
+        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
       case 'Inquired':
         return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
       case 'Trial':
@@ -121,8 +123,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
       case 'Third Follow-up':
         return 'bg-teal-500/15 text-teal-300 border-teal-500/30';
+      case 'Fourth Follow-up':
+        return 'bg-sky-500/15 text-sky-300 border-sky-500/30';
+      case 'Fifth Follow-up':
+        return 'bg-orange-500/15 text-orange-300 border-orange-500/30';
+      case 'Sixth Follow-up':
+        return 'bg-violet-500/15 text-violet-300 border-violet-500/30';
       case 'Call on Custom Date':
-        return 'bg-violet-500/15 text-violet-300 border-violet-500/30 shadow-[0_0_10px_rgba(139,92,246,0.15)]';
+        return 'bg-purple-500/15 text-purple-300 border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.15)]';
       case 'Converted':
         return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.25)]';
       case 'Redundant':
@@ -349,18 +357,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             <span>{lead.phone}</span>
                           </a>
                           
-                          {/* WhatsApp Business Direct */}
+                          {/* WhatsApp Business Direct (Android Native Intent Ready) */}
                           <a
                             href={waUrl}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              openWhatsApp(lead.phone, lead.name, lead.venue, 'business');
-                            }}
-                            className="inline-flex items-center gap-1 px-1.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/20 transition-all ml-1 cursor-pointer"
+                            target={typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? undefined : "_blank"}
+                            rel={typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? undefined : "noopener noreferrer"}
+                            className="inline-flex items-center gap-1 px-1.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30 transition-all ml-1 cursor-pointer"
                             title="Open in WhatsApp Business"
                           >
-                            <MessageSquare className="w-3.5 h-3.5" />
+                            <MessageSquare className="w-3.5 h-3.5 fill-current" />
                             <span className="text-[10px] font-semibold">WA Business</span>
+                          </a>
+
+                          {/* Standard WhatsApp */}
+                          <a
+                            href={formatWhatsAppUrl(lead.phone, lead.name, lead.venue, 'standard')}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center px-1.5 py-1 rounded-lg bg-white/[0.04] text-slate-400 hover:text-emerald-400 border border-white/[0.08] text-[10px] transition-colors"
+                            title="Open in Standard WhatsApp"
+                          >
+                            <span>Standard</span>
                           </a>
                         </div>
                       </td>
@@ -432,6 +449,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 </button>
                               )}
                             </div>
+                          ) : (lead.outreachStep === 4 ||
+                               lead.stage === 'Second Follow-up' ||
+                               lead.stage === 'Fourth Follow-up' ||
+                               lead.stage === 'Sixth Follow-up') ? (
+                            <button
+                              onClick={() => changeStage(lead.id, 'Redundant')}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] font-semibold transition-colors cursor-pointer"
+                              title="Manually transition lead to Redundant stage."
+                            >
+                              <span>Mark Redundant</span>
+                            </button>
                           ) : (
                             STAGE_PROGRESSION[lead.stage]?.nextStage && (
                               <button

@@ -105,14 +105,12 @@ export const ScheduleCallModal: React.FC<ScheduleCallModalProps> = ({
             </a>
             <a
               href={waUrl}
-              onClick={(e) => {
-                e.preventDefault();
-                openWhatsApp(lead.phone, lead.name, lead.venue, 'business');
-              }}
-              className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20 transition-colors flex items-center gap-1 text-xs cursor-pointer"
+              target={typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? undefined : "_blank"}
+              rel={typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? undefined : "noopener noreferrer"}
+              className="px-2 py-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 rounded-lg border border-emerald-500/30 transition-colors flex items-center gap-1 text-xs cursor-pointer"
               title="Chat on WhatsApp Business"
             >
-              <MessageSquare className="w-3.5 h-3.5" />
+              <MessageSquare className="w-3.5 h-3.5 fill-current" />
               <span className="text-[10px] font-semibold">WA Business</span>
             </a>
           </div>
