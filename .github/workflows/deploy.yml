@@ -1,4 +1,4 @@
-name: Deploy to Firebase Hosting on Merge
+name: Deploy to GitHub Pages
 
 on:
   push:
@@ -7,8 +7,20 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   build_and_deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,13 +29,12 @@ jobs:
           node-version: 22
       - run: npm install --legacy-peer-deps
       - run: npm run build
-      - run: node -e 'try { const sa = JSON.parse(process.env.SA); console.log("::notice::Using Service Account Email -> " + sa.client_email + " for project -> " + sa.project_id); } catch(e) { console.log("::error::Invalid JSON in FIREBASE_SERVICE_ACCOUNT"); }'
-        env:
-          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      - name: Deploy to Firebase Hosting
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/sa.json
-          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json
-          npx firebase-tools deploy --only hosting --project leadmanagement-bdb13
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'dist'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
