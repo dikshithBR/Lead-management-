@@ -54,6 +54,9 @@ interface LeadContextType {
   changeStage: (id: string, newStage: PipelineStage, extraUpdates?: Partial<Lead>) => Promise<void>;
   advanceToNextStage: (id: string) => Promise<void>;
 
+  // Cloud Sync
+  syncNow: () => Promise<void>;
+
   // Custom metadata
   addCustomSource: (source: string) => Promise<void>;
   addCustomVenue: (venue: string) => Promise<void>;
@@ -77,6 +80,19 @@ const LeadContext = createContext<LeadContextType | undefined>(undefined);
 const LOCAL_STORAGE_LEADS_KEY = 'leadflow_leads_v4';
 const LOCAL_STORAGE_SOURCES_KEY = 'leadflow_sources_v4';
 const LOCAL_STORAGE_VENUES_KEY = 'leadflow_venues_v4';
+
+/**
+ * Sanitizes lead objects before sending to Firestore, ensuring no undefined keys exist.
+ */
+function cleanLeadData(lead: Partial<Lead>): Record<string, any> {
+  const clean: Record<string, any> = {};
+  for (const [key, val] of Object.entries(lead)) {
+    if (val !== undefined && val !== null) {
+      clean[key] = val;
+    }
+  }
+  return clean;
+}
 
 export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [leads, setLeads] = useState<Lead[]>(() => {
@@ -283,7 +299,7 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Persist to Cloud Firestore
     try {
-      await setDoc(doc(db, 'leads', leadId), newLead);
+      await setDoc(doc(db, 'leads', leadId), cleanLeadData(newLead));
     } catch (err) {
       console.warn('Cloud sync error, saved locally:', err);
     }
@@ -317,7 +333,7 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(LOCAL_STORAGE_LEADS_KEY, JSON.stringify(newLeads));
 
     try {
-      await setDoc(doc(db, 'leads', id), updatedLead);
+      await setDoc(doc(db, 'leads', id), cleanLeadData(updatedLead));
     } catch (err) {
       console.warn('Cloud sync error, saved locally:', err);
     }
@@ -636,6 +652,29 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Manual trigger to force-sync and fetch latest leads directly from Firestore
+  const syncNow = useCallback(async () => {
+    try {
+      const leadsCol = collection(db, 'leads');
+      const snapshot = await getDocs(leadsCol);
+      const remoteLeads: Lead[] = [];
+      snapshot.forEach((docSnap) => {
+        const lead = docSnap.data() as Lead;
+        if (!docSnap.id.startsWith('sample-lead-') && lead.name && lead.stage) {
+          remoteLeads.push(lead);
+        }
+      });
+      remoteLeads.sort((a, b) => a.actionDueDate.localeCompare(b.actionDueDate));
+      setLeads(remoteLeads);
+      localStorage.setItem(LOCAL_STORAGE_LEADS_KEY, JSON.stringify(remoteLeads));
+      setIsCloudConnected(true);
+      showToast('success', 'Real-Time Sync Refreshed', `${remoteLeads.length} leads loaded directly from Cloud Firestore.`);
+    } catch (err) {
+      console.error('Manual sync error:', err);
+      showToast('error', 'Sync Failed', 'Could not refresh from cloud database.');
+    }
+  }, [showToast]);
+
   // Computed KPI Metrics
   const kpiStats = useMemo(() => {
     const totalLeads = leads.length;
@@ -705,6 +744,7 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
         advanceToNextStage,
         addCustomSource,
         addCustomVenue,
+        syncNow,
         kpiStats,
       }}
     >

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   LayoutDashboard,
   KanbanSquare,
@@ -9,6 +9,7 @@ import {
   Activity,
   Layers,
   TrendingUp,
+  RefreshCw,
 } from 'lucide-react';
 import { useLeadContext } from '../context/LeadContext';
 import { ALL_STAGES } from '../types/lead';
@@ -26,7 +27,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveView,
   onOpenAddModal,
 }) => {
-  const { kpiStats, isCloudConnected } = useLeadContext();
+  const { kpiStats, isCloudConnected, syncNow } = useLeadContext();
+  const [isSyncing, setIsSyncing] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 bg-[#090f1d]/90 backdrop-blur-xl border-b border-white/[0.08] shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
@@ -95,15 +97,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Action Button & Live Cloud Sync Status */}
           <div className="flex items-center gap-3">
-            <div
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0f1b35] border border-white/[0.08] text-[11px] font-medium"
-              title={isCloudConnected ? "Real-time Cloud Sync active with Firebase Firestore" : "Connecting to Cloud Firestore..."}
+            <button
+              onClick={() => {
+                setIsSyncing(true);
+                syncNow().finally(() => setTimeout(() => setIsSyncing(false), 500));
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0f1b35] hover:bg-[#152445] border border-white/[0.08] hover:border-blue-500/30 text-[11px] font-medium transition-all active:scale-95 cursor-pointer"
+              title={isCloudConnected ? "Click to force-refresh real-time sync with Cloud Firestore" : "Connecting to Cloud Firestore..."}
             >
-              <span className={`w-2 h-2 rounded-full ${isCloudConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-              <span className={isCloudConnected ? 'text-emerald-400 text-xs font-mono hidden sm:inline' : 'text-amber-400 text-xs font-mono hidden sm:inline'}>
-                {isCloudConnected ? 'Cloud Synced' : 'Syncing...'}
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-blue-400' : isCloudConnected ? 'text-emerald-400' : 'text-amber-400'}`} />
+              <span className={isCloudConnected ? 'text-emerald-400 text-xs font-mono font-medium' : 'text-amber-400 text-xs font-mono font-medium'}>
+                {isSyncing ? 'Syncing...' : isCloudConnected ? 'Cloud Synced' : 'Offline'}
               </span>
-            </div>
+            </button>
 
             <button
               onClick={onOpenAddModal}

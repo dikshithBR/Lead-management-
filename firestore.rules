@@ -38,5 +38,9 @@ service cloud.firestore {
       allow create, update: if isValidId(settingId) && isValidUserSettings(request.resource.data);
       allow delete: if isValidId(settingId);
     }
+
+    match /test/{docId} {
+      allow read, write: if true;
+    }
   }
 }
