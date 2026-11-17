@@ -368,17 +368,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             <MessageSquare className="w-3.5 h-3.5 fill-current" />
                             <span className="text-[10px] font-semibold">WA Business</span>
                           </a>
-
-                          {/* Standard WhatsApp */}
-                          <a
-                            href={formatWhatsAppUrl(lead.phone, lead.name, lead.venue, 'standard')}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center px-1.5 py-1 rounded-lg bg-white/[0.04] text-slate-400 hover:text-emerald-400 border border-white/[0.08] text-[10px] transition-colors"
-                            title="Open in Standard WhatsApp"
-                          >
-                            <span>Standard</span>
-                          </a>
                         </div>
                       </td>
 

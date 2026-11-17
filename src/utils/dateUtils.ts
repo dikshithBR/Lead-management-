@@ -8,13 +8,10 @@ export interface StageProgressionRule {
 
 /**
  * Strict sales workflow progression rules:
- * 1. Inquired -> Trial: 1 day
- * 2. Trial -> First Follow-up: 12 hours
- * 3. First Follow-up -> Second Follow-up: 2 days
- * 4. Second Follow-up -> Second Trial: 2 days
- * 5. Second Trial -> Third Follow-up: 12 hours
- * 6. Third Follow-up -> Converted / Call on Custom Date / Redundant
- * 7. Call on Custom Date -> return to pipeline
+ * - Inquired: Follow-up 1 (+3d) -> Follow-up 2 (+2d) -> Follow-up 3 (+2d) -> manual Redundant
+ * - 1st Trial: Trial -> 1st Follow-up (+1d) -> 2nd Follow-up (+2d) -> +2d wait -> manual Redundant
+ * - 2nd Trial: 2nd Trial -> 3rd Follow-up (+1d) -> 4th Follow-up (+1d) -> +2d wait -> manual Redundant
+ * - Call on Custom Date: Scheduled call -> Follow-up 1 (+3d) -> Follow-up 2 (+2d) -> +2d wait -> manual Redundant
  */
 export const STAGE_PROGRESSION: Record<
   PipelineStage,
@@ -23,12 +20,12 @@ export const STAGE_PROGRESSION: Record<
   'Completed': {
     nextStage: null,
     intervalText: '3 Days',
-    defaultAction: '1st Outreach Reminder: Initial check-in',
+    defaultAction: '1st Follow-up Reminder: Initial check-in',
   },
   'Inquired': {
     nextStage: 'Trial',
     intervalText: '1 Day',
-    defaultAction: 'Conduct Trial Session / Onboarding demonstration',
+    defaultAction: '1st Follow-up Reminder: Initial check-in',
   },
   'Trial': {
     nextStage: 'First Follow-up',
@@ -62,18 +59,18 @@ export const STAGE_PROGRESSION: Record<
   },
   'Call on Custom Date': {
     nextStage: 'Fifth Follow-up',
-    intervalText: '2 Days',
-    defaultAction: 'Scheduled call date reminder. If no response, advance to 5th Follow-up (2 days)',
+    intervalText: '3 Days',
+    defaultAction: 'Scheduled call date reminder. If no response, advance to Follow-up 1 (3 days)',
   },
   'Fifth Follow-up': {
     nextStage: 'Sixth Follow-up',
-    intervalText: '1 Day',
-    defaultAction: '5th follow-up call after missed custom call (1 day to 6th)',
+    intervalText: '2 Days',
+    defaultAction: 'Custom call Follow-up 1 (3 days) -> Follow-up 2 (2 days)',
   },
   'Sixth Follow-up': {
     nextStage: 'Redundant',
     intervalText: '2 Days',
-    defaultAction: '6th follow-up done. No response after 2 days -> manually push to Redundant',
+    defaultAction: 'Custom call Follow-up 2 done. Wait 2 days -> manually push to Redundant',
   },
   'Converted': {
     nextStage: null,
@@ -89,15 +86,15 @@ export const STAGE_PROGRESSION: Record<
 
 /**
  * Calculates deadline for a target pipeline stage based on strict workflow rules:
- * - Completed: 3 days (initial outreach reminder)
+ * - Completed / Inquired: 3 days (initial follow-up reminder)
  * - Trial: 1 day
  * - First Follow-up: 1 day window after 1st trial
  * - Second Follow-up: 2 days window if no response
  * - Second Trial: 2 days
  * - Third Follow-up: 1 day window after 2nd trial
  * - Fourth Follow-up: 1 day window after 3rd follow-up
- * - Fifth Follow-up: 2 days window after scheduled custom call
- * - Sixth Follow-up: 1 day window after 5th follow-up
+ * - Fifth Follow-up (Call Follow-up 1): 3 days window after scheduled custom call
+ * - Sixth Follow-up (Call Follow-up 2): 2 days window after Follow-up 1
  */
 export function calculateTargetStageDeadline(
   targetStage: PipelineStage,
@@ -109,7 +106,14 @@ export function calculateTargetStageDeadline(
     case 'Completed':
       return {
         dueDateStr: offsetDateString(todayStr, 3),
-        note: '1st Outreach Reminder: Initial check-in',
+        note: '1st Follow-up Reminder: Initial check-in',
+        label: '3 Days',
+      };
+
+    case 'Inquired':
+      return {
+        dueDateStr: offsetDateString(todayStr, 3),
+        note: '1st Follow-up Reminder: Initial check-in',
         label: '3 Days',
       };
 
@@ -157,16 +161,16 @@ export function calculateTargetStageDeadline(
 
     case 'Fifth Follow-up':
       return {
-        dueDateStr: offsetDateString(todayStr, 2),
-        note: '5th Follow-up after custom call (2 days window)',
-        label: '2 Days',
+        dueDateStr: offsetDateString(todayStr, 3),
+        note: 'Custom Call Follow-up 1 (3 days window)',
+        label: '3 Days',
       };
 
     case 'Sixth Follow-up':
       return {
-        dueDateStr: offsetDateString(todayStr, 1),
-        note: '6th Follow-up (1 day window)',
-        label: '1 Day',
+        dueDateStr: offsetDateString(todayStr, 2),
+        note: 'Custom Call Follow-up 2 (2 days window)',
+        label: '2 Days',
       };
 
     case 'Call on Custom Date':
@@ -189,13 +193,6 @@ export function calculateTargetStageDeadline(
         note: 'Closed without conversion',
         label: 'Closed',
       };
-
-    case 'Inquired':
-      return {
-        dueDateStr: todayStr,
-        note: 'Initial inquiry received',
-        label: 'Today',
-      };
   }
 }
 
@@ -207,6 +204,70 @@ export function getTodayDateString(referenceDate: Date = new Date()): string {
   const month = String(referenceDate.getMonth() + 1).padStart(2, '0');
   const day = String(referenceDate.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * Parses a YYYY-MM-DD string into a local Date object at midnight
+ */
+export function parseDateString(dateStr: string): Date {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return new Date();
+  }
+  const parts = dateStr.split('-');
+  return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+}
+
+/**
+ * Extracts local YYYY-MM-DD date string from an ISO timestamp or YYYY-MM-DD string
+ */
+export function getLocalDateStringFromIso(isoOrDate?: string): string | null {
+  if (!isoOrDate) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoOrDate)) {
+    return isoOrDate;
+  }
+  const parsed = new Date(isoOrDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return getTodayDateString(parsed);
+}
+
+/**
+ * Checks whether a lead had an action completed on a specific YYYY-MM-DD date
+ */
+export function isLeadCompletedOnDate(
+  lead: {
+    lastCompletedDate?: string;
+    completedAt?: string;
+    isCompletedToday?: boolean;
+    updatedAt?: string;
+  },
+  targetDateStr: string
+): boolean {
+  if (lead.lastCompletedDate) {
+    return lead.lastCompletedDate === targetDateStr;
+  }
+  if (lead.completedAt) {
+    const completedLocal = getLocalDateStringFromIso(lead.completedAt);
+    if (completedLocal) {
+      return completedLocal === targetDateStr;
+    }
+  }
+  if (lead.isCompletedToday && lead.updatedAt) {
+    return getLocalDateStringFromIso(lead.updatedAt) === targetDateStr;
+  }
+  return false;
+}
+
+/**
+ * Formats a YYYY-MM-DD string as a readable day label (e.g. "Tue, Nov 17, 2026")
+ */
+export function formatReadableDate(dateStr: string): string {
+  const d = parseDateString(dateStr);
+  return d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 /**
@@ -236,7 +297,7 @@ export function getUrgencyStatus(dueDateStr: string, referenceDate: Date = new D
 }
 
 /**
- * Human readable label for deadline
+ * Human readable label for deadline relative to referenceDate
  */
 export function formatDueDateLabel(dueDateStr: string, referenceDate: Date = new Date()): {
   text: string;
@@ -248,24 +309,32 @@ export function formatDueDateLabel(dueDateStr: string, referenceDate: Date = new
   }
 
   const status = getUrgencyStatus(dueDateStr, referenceDate);
-  const todayStr = getTodayDateString(referenceDate);
+  const refStr = getTodayDateString(referenceDate);
+  const actualTodayStr = getTodayDateString(new Date());
+  const isViewingActualToday = refStr === actualTodayStr;
 
-  const parts = dueDateStr.split('-');
-  const due = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-  
-  const todayParts = todayStr.split('-');
-  const today = new Date(parseInt(todayParts[0], 10), parseInt(todayParts[1], 10) - 1, parseInt(todayParts[2], 10));
+  const due = parseDateString(dueDateStr);
+  const ref = parseDateString(refStr);
 
-  const diffTime = due.getTime() - today.getTime();
+  const diffTime = due.getTime() - ref.getTime();
   const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const formattedDate = `${monthNames[due.getMonth()]} ${due.getDate()}, ${due.getFullYear()}`;
+  const shortDate = `${monthNames[due.getMonth()]} ${due.getDate()}`;
 
   if (diffDays === 0) {
-    return { text: 'Due Today', subtext: formattedDate, status: 'today' };
+    return {
+      text: isViewingActualToday ? 'Due Today' : `Due ${shortDate}`,
+      subtext: formattedDate,
+      status: 'today',
+    };
   } else if (diffDays === 1) {
-    return { text: 'Tomorrow', subtext: formattedDate, status: 'upcoming' };
+    return {
+      text: isViewingActualToday ? 'Tomorrow' : 'Next Day (+1d)',
+      subtext: formattedDate,
+      status: 'upcoming',
+    };
   } else if (diffDays > 1) {
     return { text: `In ${diffDays} days`, subtext: formattedDate, status: 'upcoming' };
   } else if (diffDays === -1) {
@@ -301,13 +370,11 @@ export function normalizePhoneNumber(phoneNumber: string): string {
  */
 export function formatWhatsAppUrl(
   phoneNumber: string,
-  clientName: string,
-  venue: string,
+  _clientName?: string,
+  _venue?: string,
   appType: WhatsAppType = 'business'
 ): string {
   const cleanedDigits = normalizePhoneNumber(phoneNumber);
-  const greeting = `Hi ${clientName}, following up regarding your inquiry at ${venue}. How can we assist you today?`;
-  const encodedMsg = encodeURIComponent(greeting);
 
   if (appType === 'business') {
     if (typeof navigator !== 'undefined') {
@@ -317,20 +384,20 @@ export function formatWhatsAppUrl(
 
       if (isAndroid) {
         // Direct package-targeted Android Intent for WhatsApp Business
-        return `intent://send?phone=${cleanedDigits}&text=${encodedMsg}#Intent;package=com.whatsapp.w4b;scheme=whatsapp;end;`;
+        return `intent://send?phone=${cleanedDigits}#Intent;package=com.whatsapp.w4b;scheme=whatsapp;end;`;
       }
 
       if (isIOS) {
-        return `whatsapp-business://send?phone=${cleanedDigits}&text=${encodedMsg}`;
+        return `whatsapp-business://send?phone=${cleanedDigits}`;
       }
     }
 
     // Default universal web / desktop link
-    return `https://api.whatsapp.com/send?phone=${cleanedDigits}&text=${encodedMsg}`;
+    return `https://api.whatsapp.com/send?phone=${cleanedDigits}`;
   }
 
   // Standard Personal WhatsApp
-  return `https://wa.me/${cleanedDigits}?text=${encodedMsg}`;
+  return `https://wa.me/${cleanedDigits}`;
 }
 
 /**
@@ -338,8 +405,8 @@ export function formatWhatsAppUrl(
  */
 export function openWhatsApp(
   phoneNumber: string,
-  clientName: string,
-  venue: string,
+  clientName?: string,
+  venue?: string,
   appType: WhatsAppType = 'business'
 ): void {
   if (typeof window === 'undefined') return;

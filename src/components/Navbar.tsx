@@ -12,7 +12,6 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useLeadContext } from '../context/LeadContext';
-import { ALL_STAGES } from '../types/lead';
 
 export type ActiveView = 'dashboard' | 'kanban' | 'actions';
 
@@ -146,9 +145,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <KanbanSquare className="w-3.5 h-3.5" />
             <span>Kanban Board</span>
-            <span className="ml-1 px-1.5 py-0.2 rounded text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20">
-              {ALL_STAGES.length} Stages
-            </span>
           </button>
 
           <button

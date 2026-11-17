@@ -20,6 +20,7 @@ import {
   getTodayDateString,
   offsetDateString,
   getUrgencyStatus,
+  isLeadCompletedOnDate,
   STAGE_PROGRESSION,
   calculateTargetStageDeadline,
 } from '../utils/dateUtils';
@@ -263,20 +264,33 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return Array.from(new Set([...DEFAULT_VENUES, ...customVenues]));
   }, [customVenues]);
 
-  // Add Lead: immediately sets initial stage to 'Completed' and schedules 1st reminder for 3 days later
+  // Add Lead: defaults to 'Inquired' (1st follow-up scheduled 3 days later)
   const addLead = async (leadData: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'ownerId'>): Promise<string> => {
     const leadId = `lead-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     const nowIso = new Date().toISOString();
     const today = getTodayDateString();
 
-    // Default stage to Completed if not explicitly specified
-    const initialStage: PipelineStage = leadData.stage || 'Completed';
-    const isCompletedStage = initialStage === 'Completed';
+    const initialStage: PipelineStage = leadData.stage || 'Inquired';
+    const isInquiryStage = initialStage === 'Inquired' || initialStage === 'Completed';
 
-    // If initial stage is Completed, schedule 1st reminder for 3 days later and set outreachStep = 1
-    const initialDueDate = leadData.actionDueDate || (isCompletedStage ? offsetDateString(today, 3) : today);
-    const initialNote = leadData.nextActionNote || (isCompletedStage ? '1st Outreach Reminder: Initial check-in' : 'Initial inquiry received');
-    const initialOutreachStep = isCompletedStage ? (leadData.outreachStep || 1) : leadData.outreachStep;
+    const initialOutreachStep = isInquiryStage ? (leadData.outreachStep || 1) : leadData.outreachStep;
+    const defaultInquiryDue =
+      initialOutreachStep === 2 || initialOutreachStep === 3
+        ? offsetDateString(today, 2)
+        : initialOutreachStep === 4
+        ? today
+        : offsetDateString(today, 3);
+    const defaultInquiryNote =
+      initialOutreachStep === 2
+        ? '2nd Follow-up: Offer Trial Session'
+        : initialOutreachStep === 3
+        ? '3rd Follow-up: Send third trial offer'
+        : initialOutreachStep === 4
+        ? "3rd follow-up executed. Awaiting manual update to 'Redundant' stage."
+        : '1st Follow-up Reminder: Initial check-in';
+
+    const initialDueDate = leadData.actionDueDate || (isInquiryStage ? defaultInquiryDue : today);
+    const initialNote = leadData.nextActionNote || (isInquiryStage ? defaultInquiryNote : 'Initial inquiry received');
 
     const newLead: Lead = {
       ...leadData,
@@ -295,7 +309,7 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = [newLead, ...leads];
     setLeads(updated);
     localStorage.setItem(LOCAL_STORAGE_LEADS_KEY, JSON.stringify(updated));
-    showToast('success', 'Lead Created', `Added "${newLead.name}" (Stage: ${initialStage}, 1st outreach scheduled in 3 days).`);
+    showToast('success', 'Lead Created', `Added "${newLead.name}" in ${initialStage}.`);
 
     // Persist to Cloud Firestore
     try {
@@ -344,14 +358,32 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const current = leads.find((l) => l.id === id);
     if (!current) return;
 
-    let autoUpdates: Partial<Lead> = {};
-    // If actionDueDate not manually overridden and stage is changing
-    if (!extraUpdates?.actionDueDate && newStage !== current.stage && newStage !== 'Call on Custom Date') {
+    const today = getTodayDateString();
+    const isInquiryTarget = newStage === 'Inquired' || newStage === 'Completed';
+    let autoUpdates: Partial<Lead> = {
+      outreachStep: isInquiryTarget ? (extraUpdates?.outreachStep ?? current.outreachStep ?? 1) : undefined,
+    };
+
+    // If actionDueDate not manually overridden and stage or inquiry sub-step is changing
+    const stepChanged = isInquiryTarget && extraUpdates?.outreachStep && extraUpdates.outreachStep !== current.outreachStep;
+    if (!extraUpdates?.actionDueDate && (newStage !== current.stage || stepChanged) && newStage !== 'Call on Custom Date') {
       const rule = calculateTargetStageDeadline(newStage);
       autoUpdates = {
+        ...autoUpdates,
         actionDueDate: rule.dueDateStr,
         nextActionNote: extraUpdates?.nextActionNote || rule.note,
         isCompletedToday: false,
+      };
+    }
+
+    if ((newStage === 'Converted' || newStage === 'Redundant') && newStage !== current.stage) {
+      autoUpdates = {
+        ...autoUpdates,
+        completedAt: new Date().toISOString(),
+        lastCompletedDate: today,
+        lastCompletedAction:
+          newStage === 'Converted' ? 'Converted lead (Won)' : 'Moved to Redundant',
+        isCompletedToday: true,
       };
     }
 
@@ -376,13 +408,18 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    const today = getTodayDateString();
     const nextStage = progression.nextStage;
     const rule = calculateTargetStageDeadline(nextStage);
     await updateLead(id, {
       stage: nextStage,
+      outreachStep: nextStage === 'Inquired' || nextStage === 'Completed' ? 1 : undefined,
       actionDueDate: rule.dueDateStr,
       nextActionNote: rule.note,
       isCompletedToday: false,
+      completedAt: new Date().toISOString(),
+      lastCompletedDate: today,
+      lastCompletedAction: `Completed ${current.stage} ➔ ${nextStage} (${rule.label})`,
     });
 
     showToast(
@@ -427,54 +464,64 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Mark Action Done with multi-track automated workflow progression:
-  // - Completed: 1st outreach (+3d) -> 2nd trial offer (+2d) -> 3rd trial offer (+2d) -> Due Today awaiting manual Redundant
+  // - Inquired / Completed: Follow-up 1 (+3d) -> Follow-up 2 (+2d) -> Follow-up 3 (+2d) -> Due Today awaiting manual Redundant
   // - 1st Trial: Trial -> 1st follow-up (+1d) -> 2nd follow-up (+2d) -> wait 2d -> manual push to Redundant
   // - 2nd Trial: 2nd Trial -> 3rd follow-up (+1d) -> 4th follow-up (+1d) -> wait 2d -> manual push to Redundant
-  // - Call on Custom Date: Reminder for particular day -> 5th follow-up (+2d) -> 6th follow-up (+1d) -> wait 2d -> manual push to Redundant
+  // - Call on Custom Date: Scheduled call -> Follow-up 1 (+3d) -> Follow-up 2 (+2d) -> wait 2d -> manual push to Redundant
   const markActionDone = async (id: string) => {
     const target = leads.find((l) => l.id === id);
     if (!target) return;
 
     const today = getTodayDateString();
+    const nowIso = new Date().toISOString();
 
-    // Track 0: Completed stage outreach sequence
-    const currentStep = target.outreachStep ?? (target.stage === 'Completed' ? 1 : undefined);
-    if (target.stage === 'Completed' || (target.outreachStep && target.outreachStep > 0)) {
+    // Track 0: Inquired (and legacy Completed) 3-step follow-up sequence (+3d, +2d, +2d)
+    if (target.stage === 'Inquired' || target.stage === 'Completed') {
+      const currentStep = target.outreachStep ?? 1;
       if (currentStep === 1) {
         const nextDue = offsetDateString(today, 2);
         await updateLead(id, {
+          stage: 'Inquired',
           outreachStep: 2,
           actionDueDate: nextDue,
-          nextActionNote: '2nd Outreach: Offer Trial Session',
+          nextActionNote: '2nd Follow-up: Offer Trial Session',
           isCompletedToday: false,
-          completedAt: new Date().toISOString(),
+          completedAt: nowIso,
+          lastCompletedDate: today,
+          lastCompletedAction: 'Inquiry Follow-up 1/3 Done ➔ Follow-up 2 (+2d)',
         });
-        showToast('success', '1st Outreach Done', '2-day delay triggered before 2nd outreach (Trial Session Offer).');
+        showToast('success', '1st Follow-up Done', '2-day delay triggered before 2nd follow-up (Trial Session Offer).');
         return;
       }
 
       if (currentStep === 2) {
         const nextDue = offsetDateString(today, 2);
         await updateLead(id, {
+          stage: 'Inquired',
           outreachStep: 3,
           actionDueDate: nextDue,
-          nextActionNote: '3rd Outreach: Send third trial offer',
+          nextActionNote: '3rd Follow-up: Send third trial offer',
           isCompletedToday: false,
-          completedAt: new Date().toISOString(),
+          completedAt: nowIso,
+          lastCompletedDate: today,
+          lastCompletedAction: 'Inquiry Follow-up 2/3 Done ➔ Follow-up 3 (+2d)',
         });
-        showToast('success', '2nd Outreach Done', '2-day delay initiated before sending 3rd trial offer.');
+        showToast('success', '2nd Follow-up Done', '2-day delay initiated before 3rd follow-up (trial offer).');
         return;
       }
 
       if (currentStep === 3) {
         await updateLead(id, {
+          stage: 'Inquired',
           outreachStep: 4,
           actionDueDate: today,
           isCompletedToday: false,
-          nextActionNote: "3rd trial offer executed. Awaiting manual update to 'Redundant' stage.",
-          completedAt: new Date().toISOString(),
+          nextActionNote: "3rd follow-up executed. Awaiting manual update to 'Redundant' stage.",
+          completedAt: nowIso,
+          lastCompletedDate: today,
+          lastCompletedAction: 'Inquiry Follow-up 3/3 Executed (Awaiting Redundant)',
         });
-        showToast('info', '3rd Trial Offer Executed', "Lead remains in 'Due Today' queue awaiting manual update to Redundant stage.");
+        showToast('info', '3rd Follow-up Executed', "Logged in Completed for today. Ready for manual update to Redundant.");
         return;
       }
     }
@@ -484,10 +531,13 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const nextDue = offsetDateString(today, 1);
       await updateLead(id, {
         stage: 'First Follow-up',
+        outreachStep: undefined,
         actionDueDate: nextDue,
         nextActionNote: '1st Follow-up after trial (1 day window)',
         isCompletedToday: false,
-        completedAt: new Date().toISOString(),
+        completedAt: nowIso,
+        lastCompletedDate: today,
+        lastCompletedAction: '1st Trial Completed ➔ 1st Follow-up (+1d)',
       });
       showToast('success', 'Trial Completed', 'Advanced to 1st Follow-up (scheduled in 1 day).');
       return;
@@ -500,7 +550,9 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
         actionDueDate: nextDue,
         nextActionNote: '2nd Follow-up: Address questions & discuss package terms (2 days window)',
         isCompletedToday: false,
-        completedAt: new Date().toISOString(),
+        completedAt: nowIso,
+        lastCompletedDate: today,
+        lastCompletedAction: 'Trial 1st Follow-up Done ➔ 2nd Follow-up (+2d)',
       });
       showToast('success', '1st Follow-up Done', 'No response: Advanced to 2nd Follow-up (in 2 days).');
       return;
@@ -512,7 +564,9 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
         actionDueDate: nextDue,
         nextActionNote: '2nd follow-up done. No response after 2 days -> manually push to Redundant.',
         isCompletedToday: false,
-        completedAt: new Date().toISOString(),
+        completedAt: nowIso,
+        lastCompletedDate: today,
+        lastCompletedAction: 'Trial 2nd Follow-up Done (+2d wait before Redundant)',
       });
       showToast('info', '2nd Follow-up Done', 'Scheduled 2-day window before manual push to Redundant.');
       return;
@@ -523,10 +577,13 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const nextDue = offsetDateString(today, 1);
       await updateLead(id, {
         stage: 'Third Follow-up',
+        outreachStep: undefined,
         actionDueDate: nextDue,
         nextActionNote: '3rd Follow-up after 2nd trial (1 day window)',
         isCompletedToday: false,
-        completedAt: new Date().toISOString(),
+        completedAt: nowIso,
+        lastCompletedDate: today,
+        lastCompletedAction: '2nd Trial Completed ➔ 3rd Follow-up (+1d)',
       });
       showToast('success', '2nd Trial Completed', 'Advanced to 3rd Follow-up (scheduled in 1 day).');
       return;
@@ -539,7 +596,9 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
         actionDueDate: nextDue,
         nextActionNote: '4th Follow-up: Follow up on package offer (1 day window)',
         isCompletedToday: false,
-        completedAt: new Date().toISOString(),
+        completedAt: nowIso,
+        lastCompletedDate: today,
+        lastCompletedAction: '2nd Trial 3rd Follow-up Done ➔ 4th Follow-up (+1d)',
       });
       showToast('success', '3rd Follow-up Done', 'No response: Advanced to 4th Follow-up (in 1 day).');
       return;
@@ -551,36 +610,43 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
         actionDueDate: nextDue,
         nextActionNote: '4th follow-up done. No response after 2 days -> manually push to Redundant.',
         isCompletedToday: false,
-        completedAt: new Date().toISOString(),
+        completedAt: nowIso,
+        lastCompletedDate: today,
+        lastCompletedAction: '2nd Trial 4th Follow-up Done (+2d wait before Redundant)',
       });
       showToast('info', '4th Follow-up Done', 'Scheduled 2-day window before manual push to Redundant.');
       return;
     }
 
-    // Track 3: Call on Custom Date Flow
+    // Track 3: Call on Custom Date Flow (+3d -> +2d -> +2d wait -> manual Redundant)
     if (target.stage === 'Call on Custom Date') {
-      const nextDue = offsetDateString(today, 2);
+      const nextDue = offsetDateString(today, 3);
       await updateLead(id, {
         stage: 'Fifth Follow-up',
+        outreachStep: undefined,
         actionDueDate: nextDue,
-        nextActionNote: '5th Follow-up after scheduled call (2 days window)',
+        nextActionNote: 'Custom Call Follow-up 1 (3 days window)',
         isCompletedToday: false,
-        completedAt: new Date().toISOString(),
+        completedAt: nowIso,
+        lastCompletedDate: today,
+        lastCompletedAction: 'Scheduled Call Done ➔ Follow-up 1 (+3d)',
       });
-      showToast('info', 'Scheduled Call Done', 'No response: Advanced to 5th Follow-up (in 2 days).');
+      showToast('info', 'Scheduled Call Done', 'No response: Scheduled Follow-up 1 (in 3 days).');
       return;
     }
 
     if (target.stage === 'Fifth Follow-up') {
-      const nextDue = offsetDateString(today, 1);
+      const nextDue = offsetDateString(today, 2);
       await updateLead(id, {
         stage: 'Sixth Follow-up',
         actionDueDate: nextDue,
-        nextActionNote: '6th Follow-up: Final follow-up attempt (1 day window)',
+        nextActionNote: 'Custom Call Follow-up 2 (2 days window)',
         isCompletedToday: false,
-        completedAt: new Date().toISOString(),
+        completedAt: nowIso,
+        lastCompletedDate: today,
+        lastCompletedAction: 'Custom Call Follow-up 1 Done ➔ Follow-up 2 (+2d)',
       });
-      showToast('success', '5th Follow-up Done', 'No response: Advanced to 6th Follow-up (in 1 day).');
+      showToast('success', 'Follow-up 1 Done', 'No response: Scheduled Follow-up 2 (in 2 days).');
       return;
     }
 
@@ -588,19 +654,24 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const nextDue = offsetDateString(today, 2);
       await updateLead(id, {
         actionDueDate: nextDue,
-        nextActionNote: '6th follow-up done. No response after 2 days -> manually push to Redundant.',
+        nextActionNote: 'Custom Call Follow-up 2 done. Wait 2 days -> manually push to Redundant.',
         isCompletedToday: false,
-        completedAt: new Date().toISOString(),
+        completedAt: nowIso,
+        lastCompletedDate: today,
+        lastCompletedAction: 'Custom Call Follow-up 2 Done (+2d wait before Redundant)',
       });
-      showToast('info', '6th Follow-up Done', 'Scheduled 2-day window before manual push to Redundant.');
+      showToast('info', 'Follow-up 2 Done', 'Scheduled 2-day window before manual push to Redundant.');
       return;
     }
 
     // Default toggle for other leads
-    const isNowDone = !target.isCompletedToday;
+    const wasCompletedToday = isLeadCompletedOnDate(target, today);
+    const isNowDone = !wasCompletedToday;
     await updateLead(id, {
       isCompletedToday: isNowDone,
-      completedAt: isNowDone ? new Date().toISOString() : undefined,
+      completedAt: isNowDone ? nowIso : undefined,
+      lastCompletedDate: isNowDone ? today : undefined,
+      lastCompletedAction: isNowDone ? `Action completed (${target.stage})` : undefined,
     });
     if (isNowDone) {
       showToast('success', 'Task Completed', `Follow-up action for ${target.name} marked done!`);
@@ -675,8 +746,9 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [showToast]);
 
-  // Computed KPI Metrics
+  // Computed KPI Metrics (for Today)
   const kpiStats = useMemo(() => {
+    const todayStr = getTodayDateString();
     const totalLeads = leads.length;
     let convertedWon = 0;
     let inPipeline = 0;
@@ -686,23 +758,27 @@ export const LeadProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let completedTodayCount = 0;
 
     leads.forEach((lead) => {
+      const isTerminal = lead.stage === 'Converted' || lead.stage === 'Redundant';
       if (lead.stage === 'Converted') {
         convertedWon++;
-      } else if (lead.stage !== 'Redundant') {
+      } else if (!isTerminal) {
         inPipeline++;
       }
 
-      if (lead.isCompletedToday) {
+      const completedToday = isLeadCompletedOnDate(lead, todayStr);
+      if (completedToday) {
         completedTodayCount++;
       }
 
-      const urgency = getUrgencyStatus(lead.actionDueDate);
-      if (urgency === 'today') {
-        dueTodayCount++;
-      } else if (urgency === 'overdue') {
-        overdueCount++;
-      } else {
-        upcomingCount++;
+      if (!isTerminal) {
+        const urgency = getUrgencyStatus(lead.actionDueDate);
+        if (urgency === 'today' && !completedToday) {
+          dueTodayCount++;
+        } else if (urgency === 'overdue' && !completedToday) {
+          overdueCount++;
+        } else if (urgency === 'upcoming') {
+          upcomingCount++;
+        }
       }
     });
 

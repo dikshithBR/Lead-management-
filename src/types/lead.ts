@@ -42,6 +42,8 @@ export interface Lead {
   outreachStep?: number; // 1 = 1st reminder (+3d), 2 = 2nd outreach trial offer (+2d), 3 = 3rd trial offer (+2d), 4 = executed awaiting manual Redundant
   isCompletedToday?: boolean;
   completedAt?: string;
+  lastCompletedDate?: string; // YYYY-MM-DD local date when an action was last completed
+  lastCompletedAction?: string; // Summary of the action completed on lastCompletedDate
   createdAt: string;
   updatedAt: string;
 }

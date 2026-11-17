@@ -15,7 +15,7 @@ export const LeadModal: React.FC<LeadModalProps> = ({
   isOpen,
   onClose,
   leadToEdit,
-  initialStage = 'Completed',
+  initialStage = 'Inquired',
 }) => {
   const {
     allSources,
@@ -56,12 +56,12 @@ export const LeadModal: React.FC<LeadModalProps> = ({
       setLeadSource(leadToEdit.leadSource);
       setVenue(leadToEdit.venue);
     } else {
-      const defStage = initialStage || 'Completed';
+      const defStage = initialStage || 'Inquired';
       setName('');
       setPhone('');
       setStage(defStage);
-      if (defStage === 'Completed') {
-        setNextActionNote('1st Outreach Reminder: Initial check-in');
+      if (defStage === 'Inquired' || defStage === 'Completed') {
+        setNextActionNote('1st Follow-up Reminder: Initial check-in');
         setActionDueDate(offsetDateString(today, 3));
       } else {
         const rule = calculateTargetStageDeadline(defStage);
@@ -137,7 +137,7 @@ export const LeadModal: React.FC<LeadModalProps> = ({
           actionDueDate,
           leadSource,
           venue,
-          outreachStep: stage === 'Completed' ? 1 : undefined,
+          outreachStep: stage === 'Inquired' || stage === 'Completed' ? 1 : undefined,
         });
       }
       onClose();

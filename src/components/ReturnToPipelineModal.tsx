@@ -21,10 +21,10 @@ interface StageOption {
 const RETURN_OPTIONS: StageOption[] = [
   {
     stage: 'Fifth Follow-up',
-    label: '5th Follow-up (No Response)',
-    deadlineText: 'Due in 2 Days',
+    label: 'Call Follow-up 1 (No Response)',
+    deadlineText: 'Due in 3 Days',
     badgeClass: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
-    description: 'Call missed / no response. Follow up again in 2 days.',
+    description: 'Call missed / no response. Follow up again in 3 days.',
   },
   {
     stage: 'Trial',
@@ -70,10 +70,10 @@ const RETURN_OPTIONS: StageOption[] = [
   },
   {
     stage: 'Sixth Follow-up',
-    label: '6th Follow-up',
-    deadlineText: 'Due in 1 Day',
+    label: 'Call Follow-up 2',
+    deadlineText: 'Due in 2 Days',
     badgeClass: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
-    description: 'Final follow-up attempt before redundancy review.',
+    description: '2nd call follow-up before 2-day redundancy review.',
   },
   {
     stage: 'Converted',
